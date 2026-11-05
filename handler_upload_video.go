@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -120,7 +119,9 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	fileKey := fmt.Sprintf("%v%v%v", prefix, randomBase, ext)
 
-	_, err = cfg.s3Client.PutObject(context.Background(), &s3.PutObjectInput{
+	// A cancelled request (client gone) aborts the upload; S3 never stores a
+	// partial PutObject, so nothing is orphaned.
+	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &fileKey,
 		Body:        tmpProcessedFile,
