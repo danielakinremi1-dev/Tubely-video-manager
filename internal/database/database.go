@@ -17,7 +17,10 @@ type Client struct {
 }
 
 func NewClient(pathToDB string) (Client, error) {
-	db, err := sql.Open("sqlite3", pathToDB)
+	// SQLite ignores REFERENCES clauses unless foreign_keys is on, and the
+	// setting is per connection. Putting it in the DSN applies it to every
+	// connection database/sql opens, which a one-off PRAGMA wouldn't.
+	db, err := sql.Open("sqlite3", pathToDB+"?_foreign_keys=on")
 	if err != nil {
 		return Client{}, err
 	}

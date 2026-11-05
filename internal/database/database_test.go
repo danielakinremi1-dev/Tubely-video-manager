@@ -220,6 +220,52 @@ func TestMigrationsRollBackAndReapply(t *testing.T) {
 	}
 }
 
+func TestForeignKeysEnforced(t *testing.T) {
+	c := newTestClient(t)
+
+	// Every pooled connection must have enforcement on, not just the first.
+	c.db.SetMaxIdleConns(4)
+	conns := make([]*sql.Conn, 3)
+	for i := range conns {
+		conn, err := c.db.Conn(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		conns[i] = conn
+		var on int
+		if err := conn.QueryRowContext(t.Context(), "PRAGMA foreign_keys").Scan(&on); err != nil || on != 1 {
+			t.Errorf("connection %d: foreign_keys = %d (%v), want 1", i, on, err)
+		}
+	}
+	for _, conn := range conns {
+		conn.Close()
+	}
+
+	if _, err := c.CreateVideo(CreateVideoParams{Title: "nobody's", UserID: uuid.New()}); err == nil {
+		t.Error("CreateVideo for a nonexistent user succeeded")
+	}
+
+	u := createTestUser(t, c)
+	v, err := c.CreateVideo(CreateVideoParams{Title: "mine", UserID: u.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.CreateRefreshToken(CreateRefreshTokenParams{Token: "tok", UserID: u.ID, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteUser(u.ID); err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+	if _, err := c.GetVideo(v.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("video after owner deleted: err = %v, want ErrNotFound", err)
+	}
+	var tokens int
+	c.db.QueryRow("SELECT count(*) FROM refresh_tokens WHERE user_id = ?", u.ID).Scan(&tokens)
+	if tokens != 0 {
+		t.Errorf("%d refresh tokens left after owner deleted", tokens)
+	}
+}
+
 func TestMigrateIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 	for i := range 2 {
