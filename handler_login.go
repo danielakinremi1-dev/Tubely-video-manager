@@ -9,6 +9,10 @@ import (
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 )
 
+// accessTokenTTL is short on purpose; clients use the refresh token
+// (POST /api/refresh) to obtain new access tokens for long sessions.
+const accessTokenTTL = time.Hour
+
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
@@ -47,7 +51,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	accessToken, err := auth.MakeJWT(
 		user.ID,
 		cfg.jwtSecret,
-		time.Hour*24*30,
+		accessTokenTTL,
 	)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create access JWT", err)

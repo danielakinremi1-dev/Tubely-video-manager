@@ -26,11 +26,10 @@ async function createVideoDraft() {
   const description = document.getElementById('video-description').value;
 
   try {
-    const res = await fetch('/api/videos', {
+    const res = await authFetch('/api/videos', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
       body: JSON.stringify({ title, description }),
     });
@@ -68,6 +67,7 @@ async function login() {
 
     if (data.token) {
       localStorage.setItem('token', data.token);
+      localStorage.setItem('refresh_token', data.refresh_token);
       document.getElementById('auth-section').style.display = 'none';
       document.getElementById('video-section').style.display = 'block';
       await getVideos();
@@ -103,9 +103,64 @@ async function signup() {
 }
 
 function logout() {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (refreshToken) {
+    // Best effort: revoke the session server-side without blocking the UI.
+    fetch('/api/revoke', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    }).catch(() => {});
+  }
   localStorage.removeItem('token');
+  localStorage.removeItem('refresh_token');
   document.getElementById('auth-section').style.display = 'block';
   document.getElementById('video-section').style.display = 'none';
+}
+
+let refreshInFlight = null;
+
+// Exchanges the stored refresh token for a new access token. Concurrent
+// callers share one in-flight request. Resolves to true on success.
+function refreshAccessToken() {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) return false;
+      const res = await fetch('/api/refresh', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${refreshToken}` },
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      localStorage.setItem('token', data.token);
+      return true;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+// fetch() with the access token attached. On a 401 it refreshes the
+// access token once and retries; if that fails the user is logged out.
+async function authFetch(url, options = {}) {
+  const send = () =>
+    fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+
+  const res = await send();
+  if (res.status !== 401) return res;
+
+  if (!(await refreshAccessToken())) {
+    logout();
+    throw new Error('Session expired. Please log in again.');
+  }
+  return send();
 }
 
 function setUploadButtonState(uploading, selector) {
@@ -130,11 +185,8 @@ async function uploadThumbnail(videoID) {
   setUploadButtonState(true, uploadBtnSelector);
 
   try {
-    const res = await fetch(`/api/thumbnail_upload/${videoID}`, {
+    const res = await authFetch(`/api/thumbnail_upload/${videoID}`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
       body: formData,
     });
     if (!res.ok) {
@@ -163,11 +215,8 @@ async function uploadVideoFile(videoID) {
   setUploadButtonState(true, uploadBtnSelector);
 
   try {
-    const res = await fetch(`/api/video_upload/${videoID}`, {
+    const res = await authFetch(`/api/video_upload/${videoID}`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
       body: formData,
     });
     if (!res.ok) {
@@ -188,11 +237,8 @@ const videoStateHandler = createVideoStateHandler();
 
 async function getVideos() {
   try {
-    const res = await fetch('/api/videos', {
+    const res = await authFetch('/api/videos', {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
     });
     if (!res.ok) {
       const data = await res.json();
@@ -231,11 +277,8 @@ function createVideoStateHandler() {
 
 async function getVideo(videoID) {
   try {
-    const res = await fetch(`/api/videos/${videoID}`, {
+    const res = await authFetch(`/api/videos/${videoID}`, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
     });
     if (!res.ok) {
       throw new Error('Failed to get video.');
@@ -283,11 +326,8 @@ async function deleteVideo() {
   }
 
   try {
-    const res = await fetch(`/api/videos/${currentVideo.id}`, {
+    const res = await authFetch(`/api/videos/${currentVideo.id}`, {
       method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
     });
     if (!res.ok) {
       throw new Error('Failed to delete video.');
