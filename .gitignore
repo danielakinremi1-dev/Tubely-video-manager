@@ -1,7 +1,20 @@
 out
 *.db
-.env
 assets/
 samples/
-tubely-upgrade-plan.md
 /tubely
+
+# Local environment and credentials (keep the template)
+.env
+.env.*
+!.env.example
+
+# Terraform state, plans and variable files
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+
+# Maintainer-only notes
+notes/
