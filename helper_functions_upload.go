@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Upper bounds for the external media tools. ffprobe only reads headers;
@@ -45,14 +45,11 @@ func runTool(ctx context.Context, timeout time.Duration, name string, args ...st
 	return stdout.Bytes(), nil
 }
 
-// newObjectKey returns a random, URL-safe object key such as
-// "thumbnails/<43 random chars>.png".
-func newObjectKey(prefix, ext string) (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate object key: %w", err)
-	}
-	return prefix + base64.RawURLEncoding.EncodeToString(b) + ext, nil
+// newObjectKey returns a unique, URL-safe object key such as
+// "thumbnails/0b7c3c1e-5f0a-4d3e-9c47-2a8f1e6d9b10.png". UUIDv4 carries 122
+// random bits from crypto/rand, so keys are unguessable and never collide.
+func newObjectKey(prefix, ext string) string {
+	return prefix + uuid.NewString() + ext
 }
 
 func getExtension(mediaType string) string {

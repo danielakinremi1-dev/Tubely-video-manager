@@ -63,7 +63,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 **Video upload**
 - [x] `exec.CommandContext` with a timeout for ffmpeg/ffprobe, with stderr captured in the returned error
 - [x] Use `r.Context()` for S3 calls so a cancelled request stops the upload
-- [ ] `uuid.NewString()` for object keys instead of unchecked `rand.Read`
+- [x] `uuid.NewString()` for object keys instead of unchecked `rand.Read`
 - [ ] Ownership mismatch returns 403 with a JSON error, not 401 with `{}`
 - [ ] Fix the "Missing Content-Type for thumbnail" message in the video handler
 - [ ] Sniff the real content type (`http.DetectContentType`) instead of trusting the client header

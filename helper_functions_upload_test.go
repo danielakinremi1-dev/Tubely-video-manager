@@ -9,22 +9,19 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestNewObjectKey(t *testing.T) {
-	a, err := newObjectKey("thumbnails/", ".png")
-	if err != nil {
-		t.Fatalf("newObjectKey: %v", err)
-	}
-	b, err := newObjectKey("thumbnails/", ".png")
-	if err != nil {
-		t.Fatalf("newObjectKey: %v", err)
-	}
+	a := newObjectKey("thumbnails/", ".png")
+	b := newObjectKey("thumbnails/", ".png")
 	if !strings.HasPrefix(a, "thumbnails/") || !strings.HasSuffix(a, ".png") {
 		t.Errorf("key %q lacks prefix/suffix", a)
 	}
-	if strings.ContainsAny(strings.TrimPrefix(a, "thumbnails/"), "/+=") {
-		t.Errorf("key %q is not URL-safe", a)
+	id := strings.TrimSuffix(strings.TrimPrefix(a, "thumbnails/"), ".png")
+	if _, err := uuid.Parse(id); err != nil {
+		t.Errorf("key %q doesn't contain a UUID: %v", a, err)
 	}
 	if a == b {
 		t.Errorf("two keys are identical: %q", a)

@@ -1,10 +1,7 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -99,11 +96,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	defer tmpProcessedFile.Close()
 
-	ext := getExtension(mediaType)
-	key := make([]byte, 32)
-	rand.Read(key)
-	randomBase := base64.RawURLEncoding.EncodeToString(key)
-
 	prefix := "other/"
 	aspectRatio, err := getVideoAspectRatio(r.Context(), tmp.Name())
 	if err != nil {
@@ -117,7 +109,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		prefix = "portrait/"
 	}
 
-	fileKey := fmt.Sprintf("%v%v%v", prefix, randomBase, ext)
+	fileKey := newObjectKey(prefix, getExtension(mediaType))
 
 	// A cancelled request (client gone) aborts the upload; S3 never stores a
 	// partial PutObject, so nothing is orphaned.

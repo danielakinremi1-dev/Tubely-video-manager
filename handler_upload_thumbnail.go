@@ -66,11 +66,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	thumbnailKey, err := newObjectKey("thumbnails/", fileExtension)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to generate thumbnail key", err)
-		return
-	}
+	thumbnailKey := newObjectKey("thumbnails/", fileExtension)
 
 	// The multipart file is seekable, which S3 signing over plain http needs.
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
