@@ -1,5 +1,6 @@
 out
 *.db
+*.db.bak
 assets/
 samples/
 /tubely
