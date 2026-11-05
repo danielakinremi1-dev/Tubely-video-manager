@@ -13,7 +13,6 @@ import (
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
