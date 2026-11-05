@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.24
+	github.com/pressly/goose/v3 v3.29.0
 )
 
 require (
@@ -30,6 +31,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.7 // indirect
 	github.com/aws/smithy-go v1.28.8 // indirect
-	golang.org/x/crypto v0.14.0 // indirect
-	golang.org/x/sys v0.13.0 // indirect
+	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/sethvargo/go-retry v0.5.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 )

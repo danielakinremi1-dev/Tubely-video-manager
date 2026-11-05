@@ -7,7 +7,7 @@ If a `notes/` directory exists locally, read it for maintainer context. It is gi
 ## Stack
 
 - Go (version in `go.mod`), standard-library `net/http` with method-pattern routing (`mux.HandleFunc("POST /api/...")`)
-- SQLite through `mattn/go-sqlite3`, which needs cgo. Until goose migrations land (Phase 1), the schema is auto-migrated in `internal/database/database.go`.
+- SQLite through `mattn/go-sqlite3`, which needs cgo. The schema is managed by goose migrations that run automatically on startup (`internal/database/migrate.go`).
 - `aws-sdk-go-v2` for S3. Locally, `docker compose` runs `adobe/s3mock` on :9090 (path-style, no auth). On AWS, media is served through CloudFront. The DB stores object **keys**; public URLs are built at response time from `MEDIA_BASE_URL` (`withMediaURLs` in `media_url.go`).
 - `ffmpeg` and `ffprobe` must be on PATH. They handle fast-start remuxing and aspect-ratio detection.
 - Frontend: vanilla JS, HTML and CSS in `app/`, served at `/app/`. There is no build step.
@@ -37,6 +37,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 - `docker-compose.yml`, `Makefile`: local services and shortcuts
 - `json.go`: `respondWithJSON` / `respondWithError`. Use these for every response.
 - `internal/database`: SQL by hand, with no ORM. Lookups return `database.ErrNotFound` when a row is missing.
+- `internal/database/migrations/`: numbered goose SQL migrations (`NNNNN_name.sql`), embedded in the binary. Never edit one that has shipped; add a new one.
 - `internal/auth`: JWT, refresh tokens, password hashing, bearer header parsing
 - `app/`: frontend
 - `docs/`: public docs (`ROADMAP.md`)

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -15,7 +16,7 @@ func newTestClient(t *testing.T) Client {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	t.Cleanup(func() { c.db.Close() })
+	t.Cleanup(func() { c.Close() })
 	return c
 }
 
@@ -82,54 +83,83 @@ func TestGetVideoUnknown(t *testing.T) {
 	}
 }
 
-func TestMigrationIsIdempotentAndBackfillsKeys(t *testing.T) {
+// Schemas that existed before goose: the original starter, and what the
+// Phase 0.5 auto-migration left (key columns added).
+const (
+	starterSchema = `
+	CREATE TABLE users (id TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, password TEXT NOT NULL, email TEXT UNIQUE NOT NULL);
+	CREATE TABLE refresh_tokens (token TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, revoked_at TIMESTAMP, user_id TEXT NOT NULL,
+		expires_at TIMESTAMP NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id));
+	CREATE TABLE videos (id TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, title TEXT NOT NULL, description TEXT,
+		thumbnail_url TEXT, video_url TEXT TEXT, user_id INTEGER, FOREIGN KEY(user_id) REFERENCES users(id));`
+	autoMigratedSchema = starterSchema + `
+	ALTER TABLE videos ADD COLUMN video_key TEXT;
+	ALTER TABLE videos ADD COLUMN thumbnail_key TEXT;`
+)
+
+// Goose must adopt databases created before it existed, without losing rows,
+// and derive object keys from legacy CDN URLs.
+func TestMigrateAdoptsPreGooseDatabases(t *testing.T) {
+	for name, schema := range map[string]string{"starter": starterSchema, "auto-migrated": autoMigratedSchema} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "legacy.db")
+			raw, err := sql.Open("sqlite3", path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			userID, legacyID, brokenID := uuid.New(), uuid.New(), uuid.New()
+			stmts := []string{schema,
+				`INSERT INTO users (id, password, email) VALUES ('` + userID.String() + `', 'hash', 'a@example.com')`,
+				`INSERT INTO videos (id, title, description, video_url, user_id) VALUES ('` + legacyID.String() +
+					`', 'legacy', '', 'https://dxxxx.cloudfront.net/portrait/abc.mp4', '` + userID.String() + `')`,
+				`INSERT INTO videos (id, title, description, video_url, user_id) VALUES ('` + brokenID.String() +
+					`', 'broken', '', 'not a url', '` + userID.String() + `')`,
+			}
+			for _, stmt := range stmts {
+				if _, err := raw.Exec(stmt); err != nil {
+					t.Fatalf("seed: %v\n%s", err, stmt)
+				}
+			}
+			raw.Close()
+
+			c, err := NewClient(path)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			t.Cleanup(func() { c.Close() })
+
+			got, err := c.GetVideo(legacyID)
+			if err != nil {
+				t.Fatalf("GetVideo: %v", err)
+			}
+			if got.VideoKey == nil || *got.VideoKey != "portrait/abc.mp4" {
+				t.Errorf("legacy VideoKey = %v, want portrait/abc.mp4", got.VideoKey)
+			}
+			if got.UserID != userID {
+				t.Errorf("UserID = %v, want %v", got.UserID, userID)
+			}
+			got, err = c.GetVideo(brokenID)
+			if err != nil {
+				t.Fatalf("GetVideo: %v", err)
+			}
+			if got.VideoKey != nil {
+				t.Errorf("unparseable URL VideoKey = %q, want nil", *got.VideoKey)
+			}
+		})
+	}
+}
+
+func TestMigrateIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
-	c, err := NewClient(path)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	u := createTestUser(t, c)
-
-	legacy, err := c.CreateVideo(CreateVideoParams{Title: "legacy", UserID: u.ID})
-	if err != nil {
-		t.Fatalf("CreateVideo: %v", err)
-	}
-	broken, err := c.CreateVideo(CreateVideoParams{Title: "broken", UserID: u.ID})
-	if err != nil {
-		t.Fatalf("CreateVideo: %v", err)
-	}
-	// Simulate rows written before video_key existed.
-	for id, url := range map[string]string{
-		legacy.ID.String(): "https://dxxxx.cloudfront.net/portrait/abc.mp4",
-		broken.ID.String(): "not a url",
-	} {
-		if _, err := c.db.Exec("UPDATE videos SET video_url = ?, video_key = NULL WHERE id = ?", url, id); err != nil {
-			t.Fatalf("seed legacy row: %v", err)
+	for i := range 2 {
+		c, err := NewClient(path)
+		if err != nil {
+			t.Fatalf("NewClient #%d: %v", i+1, err)
 		}
-	}
-	c.db.Close()
-
-	// Re-opening runs the migration again: it must not fail, and it must
-	// backfill keys from legacy URLs.
-	c, err = NewClient(path)
-	if err != nil {
-		t.Fatalf("second NewClient: %v", err)
-	}
-	t.Cleanup(func() { c.db.Close() })
-
-	got, err := c.GetVideo(legacy.ID)
-	if err != nil {
-		t.Fatalf("GetVideo: %v", err)
-	}
-	if got.VideoKey == nil || *got.VideoKey != "portrait/abc.mp4" {
-		t.Errorf("legacy VideoKey = %v, want portrait/abc.mp4", got.VideoKey)
-	}
-	got, err = c.GetVideo(broken.ID)
-	if err != nil {
-		t.Fatalf("GetVideo: %v", err)
-	}
-	if got.VideoKey != nil {
-		t.Errorf("unparseable URL VideoKey = %q, want nil", *got.VideoKey)
+		c.Close()
 	}
 }
 
