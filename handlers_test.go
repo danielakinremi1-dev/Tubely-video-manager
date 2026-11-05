@@ -206,3 +206,44 @@ func TestJSONBodyErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateVideoValidation(t *testing.T) {
+	cfg := newTestConfig(t)
+	_, token := newTestUser(t, cfg, "owner@example.com")
+
+	cases := []struct {
+		name, title, description string
+		want                     int
+		wantTitle                string
+	}{
+		{"ok", "My video", "", http.StatusCreated, "My video"},
+		{"trimmed", "  padded  ", "", http.StatusCreated, "padded"},
+		{"100 multibyte chars", strings.Repeat("é", 100), "", http.StatusCreated, strings.Repeat("é", 100)},
+		{"missing", "", "", http.StatusBadRequest, ""},
+		{"only spaces", "   ", "", http.StatusBadRequest, ""},
+		{"101 chars", strings.Repeat("a", 101), "", http.StatusBadRequest, ""},
+		{"long description", "ok", strings.Repeat("d", 5001), http.StatusBadRequest, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]string{"title": tc.title, "description": tc.description})
+			req := httptest.NewRequest("POST", "/api/videos", bytes.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := serve("POST /api/videos", cfg.handlerVideoMetaCreate, req)
+			if tc.want != http.StatusCreated {
+				assertJSONError(t, rec, tc.want)
+				return
+			}
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tc.want, rec.Body)
+			}
+			var v database.Video
+			if err := json.Unmarshal(rec.Body.Bytes(), &v); err != nil {
+				t.Fatal(err)
+			}
+			if v.Title != tc.wantTitle {
+				t.Errorf("title = %q, want %q", v.Title, tc.wantTitle)
+			}
+		})
+	}
+}

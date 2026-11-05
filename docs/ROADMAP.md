@@ -81,7 +81,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 **Request handling**
 - [x] JSON decode errors return 400
-- [ ] Validate video titles: required, with a length limit
+- [x] Validate video titles: required, with a length limit
 
 **Done when:** every upload failure mode returns the correct 4xx/5xx with a JSON error, and no temp files or orphaned objects are left behind.
 

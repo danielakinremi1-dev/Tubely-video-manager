@@ -2,12 +2,36 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/google/uuid"
 )
+
+const (
+	maxTitleLength       = 100
+	maxDescriptionLength = 5000
+)
+
+// validateVideoParams trims the title and enforces length limits. Lengths
+// count characters (runes), not bytes, so "café" is 4 long, not 5.
+func validateVideoParams(p *database.CreateVideoParams) error {
+	p.Title = strings.TrimSpace(p.Title)
+	if p.Title == "" {
+		return errors.New("title is required")
+	}
+	if n := utf8.RuneCountInString(p.Title); n > maxTitleLength {
+		return fmt.Errorf("title is %d characters; the limit is %d", n, maxTitleLength)
+	}
+	if n := utf8.RuneCountInString(p.Description); n > maxDescriptionLength {
+		return fmt.Errorf("description is %d characters; the limit is %d", n, maxDescriptionLength)
+	}
+	return nil
+}
 
 func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
@@ -27,6 +51,10 @@ func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Requ
 
 	params := parameters{}
 	if !decodeJSON(w, r, &params) {
+		return
+	}
+	if err := validateVideoParams(&params.CreateVideoParams); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid video: "+err.Error(), err)
 		return
 	}
 	params.UserID = userID
