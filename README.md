@@ -1,65 +1,167 @@
-# learn-file-storage-s3-golang-starter (Tubely)
+# Tubely
 
-This repo contains the starter code for the Tubely application - the #1 tool for engagement bait - for the "Learn File Servers and CDNs with S3 and CloudFront" [course](https://www.boot.dev/courses/learn-file-servers-s3-cloudfront-golang) on [boot.dev](https://www.boot.dev)
+Tubely is a video-hosting backend written in Go. Users sign up, create video drafts, upload an MP4 and a thumbnail, and play the videos back from S3-compatible object storage. It started as a course starter project and is being built up, one reviewable phase at a time, into a production-shaped service: validated uploads, multipart transfers to S3, versioned database migrations, and infrastructure as code.
+
+Everything runs on your machine. You don't need an AWS account.
+
+## Features
+
+- **Auth:** argon2id password hashes, 1-hour JWT access tokens, and refresh tokens stored in the database so they can be revoked. The web UI refreshes expired access tokens on its own.
+- **Uploads that check what they receive:**
+  - The file type is detected from the file's bytes, not the client's `Content-Type`.
+  - Size limits: 1 GB for videos, 10 MB for thumbnails.
+  - ffprobe confirms the file is a playable video.
+  - Every failure returns the right status code with a JSON error: `400`, `401`, `403`, `404`, `413`, `415`, `422` or `500`.
+- **Streaming-ready video:** ffmpeg remuxes each upload for *fast start*, moving the `moov` index before the media data, so playback and seeking begin before the whole file downloads.
+- **Object keys sorted by shape:** videos are stored under `landscape/`, `portrait/` or `other/`, based on their aspect ratio.
+- **S3 transfers:** files over 16 MiB are sent as parallel 8 MiB multipart uploads with retries. Failed or cancelled uploads are aborted, so no parts or objects are left behind.
+- **Keys, not URLs:** the database stores object keys, and public URLs are built from `MEDIA_BASE_URL` for each response. Switching the bucket or CDN takes no data migration.
+- **No orphaned objects:** deleting a video, or replacing its file or thumbnail, removes the old objects from storage.
+- **Versioned schema:** [goose](https://github.com/pressly/goose) migrations are embedded in the binary and run at startup. Foreign keys are enforced and cascade on delete.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["Web UI (app/)"] -->|"JSON + JWT"| API["Go API (net/http)"]
+    API --> DB[("SQLite<br/>goose migrations")]
+    API --> FF["ffprobe / ffmpeg<br/>validate + fast start"]
+    API -->|"S3 API, multipart"| Store["S3-compatible bucket"]
+    Store -.-> Mock["S3Mock in Docker<br/>(local)"]
+    Store -.-> S3["AWS S3 + CloudFront<br/>(Phase 3)"]
+    UI -->|"playback via MEDIA_BASE_URL"| Store
+```
+
+An upload works like this:
+1. Authenticate and check that the user owns the video.
+2. Cap the body size and detect the file type from its bytes.
+3. Probe the file with ffprobe for its aspect ratio.
+4. Remux it with ffmpeg for fast start.
+5. Upload it to the bucket under a random UUID key.
+6. Save the key in SQLite and delete the previous object.
+
+## What runs where
+
+| Piece | Locally (today) | On AWS |
+|---|---|---|
+| API and web UI | `go run .` on your machine | Not deployed yet |
+| Database | SQLite file (`DB_PATH`) | Not deployed yet |
+| Media storage | [S3Mock](https://github.com/adobe/S3Mock) in Docker on `:9090` | S3 bucket behind CloudFront, managed by Terraform in [Phase 3](docs/ROADMAP.md) |
+
+An earlier version ran against a real S3 bucket and CloudFront distribution. That stack was deliberately torn down to avoid charges. The plan is to bring AWS back as Terraform you can create for a demo and destroy with one command. The code already supports real S3: change the settings described in `.env.example`.
+
+## Prerequisites
+
+- [Go](https://go.dev/doc/install) 1.27 or newer, plus a C compiler for the SQLite driver (cgo): `build-essential` on Debian/Ubuntu, or the Xcode command line tools on macOS.
+- [Docker](https://docs.docker.com/get-docker/) with Compose v2, which runs the S3 emulator.
+- [FFmpeg](https://ffmpeg.org/download.html). Both `ffmpeg` and `ffprobe` must be on your `PATH`.
+
+  ```bash
+  # Debian/Ubuntu
+  sudo apt update && sudo apt install ffmpeg
+
+  # macOS
+  brew install ffmpeg
+  ```
+
+- Optional: [SQLite 3](https://www.sqlite.org/download.html), to inspect the database by hand (`sudo apt install sqlite3` or `brew install sqlite3`).
 
 ## Quickstart
 
-*This is to be used as a *reference\* in case you need it, you should follow the instructions in the course rather than trying to do everything here.
-
-## 1. Install dependencies
-
-- [Go](https://golang.org/doc/install)
-- `go mod download` to download all dependencies
-- [FFMPEG](https://ffmpeg.org/download.html) - both `ffmpeg` and `ffprobe` are required to be in your `PATH`.
-
 ```bash
-# linux
-sudo apt update
-sudo apt install ffmpeg
-
-# mac
-brew update
-brew install ffmpeg
+cp .env.example .env     # the local defaults work as they are
+make dev                 # starts the S3 emulator (docker compose up -d), then the server
 ```
 
-- [SQLite 3](https://www.sqlite.org/download.html) only required for you to manually inspect the database.
+Open **http://localhost:8091/app/**. Requests to `/` return 404 by design; the UI lives at `/app/`.
+
+To get sample videos and images to upload:
 
 ```bash
-# linux
-sudo apt update
-sudo apt install sqlite3
-
-# mac
-brew update
-brew install sqlite3
+./samplesdownload.sh     # downloads them into samples/
 ```
 
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-
-## 2. Download sample images and videos
+Other commands:
 
 ```bash
-./samplesdownload.sh
-# samples/ dir will be created
-# with sample images and videos
+make down                # stop the emulator; uploads are kept
+docker compose down -v   # stop it and delete all uploaded media
 ```
 
-## 3. Configure environment variables
+## Configuration
 
-Copy the `.env.example` file to `.env` and fill in the values.
+All settings are environment variables, read from `.env` if it exists. The defaults in `.env.example` target the local emulator.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DB_PATH` | yes | SQLite database file, created if missing |
+| `JWT_SECRET` | yes | Secret used to sign access tokens |
+| `PLATFORM` | yes | `dev` enables `POST /admin/reset` |
+| `FILEPATH_ROOT` | yes | Directory the web UI is served from (`./app`) |
+| `PORT` | yes | HTTP port |
+| `S3_BUCKET`, `S3_REGION` | yes | Media bucket and its region |
+| `MEDIA_BASE_URL` | yes* | Public base URL that object keys are served from |
+| `S3_ENDPOINT` | no | Custom S3 endpoint, such as the emulator. Leave it unset for AWS. |
+| `S3_FORCE_PATH_STYLE` | no | `true` for emulators, which need `host/bucket/key` URLs |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | no | Placeholders for the emulator. On AWS, use your normal credentials or profile. |
+
+\* `S3_CF_DISTRO` (a CloudFront domain) is still accepted in place of `MEDIA_BASE_URL`, for older configurations.
+
+## API
+
+Protected routes need `Authorization: Bearer <access token>`. Errors look like `{"error": "..."}`.
+
+| Method and path | Auth | Description |
+|---|---|---|
+| `POST /api/users` | none | Sign up with `{"email", "password"}` → `201` |
+| `POST /api/login` | none | Returns the user plus `token` (access) and `refresh_token` |
+| `POST /api/refresh` | refresh token | Returns a new access token |
+| `POST /api/revoke` | refresh token | Revokes the refresh token → `204` |
+| `POST /api/videos` | access token | Creates a draft from `{"title", "description"}` → `201`. Titles are required and at most 100 characters. |
+| `GET /api/videos` | access token | Lists your videos, newest first |
+| `GET /api/videos/{videoID}` | none | Returns one video |
+| `DELETE /api/videos/{videoID}` | owner | Deletes the video and its stored media → `204` |
+| `POST /api/video_upload/{videoID}` | owner | Multipart field `video`: an MP4 up to 1 GB |
+| `POST /api/thumbnail_upload/{videoID}` | owner | Multipart field `thumbnail`: a PNG or JPEG up to 10 MB |
+| `POST /admin/reset` | none | Deletes all data. Only works when `PLATFORM=dev`. |
+
+## Testing
 
 ```bash
-cp .env.example .env
+make check               # go build, go vet and go test (no network needed)
+make test-integration    # also runs the S3 tests against the emulator (starts it)
 ```
 
-You'll need to update values in the `.env` file to match your configuration, but _you won't need to do anything here until the course tells you to_.
+The tests cover:
+- the auth helpers;
+- database queries and migrations, including adopting older databases and a rollback round trip;
+- upload validation and error codes, through `httptest`;
+- ffprobe classification using generated media;
+- single-part, multipart and cancelled uploads against S3Mock.
 
-## 3. Run the server
+## Project layout
 
-```bash
-go run .
+```
+main.go                   config from env, wiring, routes
+handler_*.go              HTTP handlers, one file per resource
+helper_functions_upload.go  ffmpeg/ffprobe, type sniffing, object keys
+s3_client.go              S3 client, transfer manager, object cleanup
+media_url.go              object key → public URL
+json.go                   JSON responses and request decoding
+internal/auth             JWTs, refresh tokens, password hashing
+internal/database         hand-written SQL and goose migrations
+app/                      web UI (vanilla JS, no build step)
+docs/ROADMAP.md           phased plan and progress
 ```
 
-- You should see a new database file `tubely.db` created in the root directory.
-- You should see a new `assets` directory created in the root directory, this is where the images will be stored.
-- You should see a link in your console to open the local web page.
+## Status
+
+Phases 0 to 1 of the [roadmap](docs/ROADMAP.md) are done: crash fixes, local S3-compatible storage, and a correct upload pipeline. The next phases cover:
+- **Phase 2:** package structure, interfaces and operations (timeouts, graceful shutdown, structured logs, Docker).
+- **Phase 3:** Terraform for AWS with budget guardrails.
+- **Phase 4:** CI.
+- **Phase 5:** documentation.
+
+## Credits
+
+Tubely began as the starter code for boot.dev's [Learn File Servers and CDNs with S3 and CloudFront](https://www.boot.dev/courses/learn-file-servers-s3-cloudfront-golang) course. Everything since then is tracked in this repository's history and roadmap.
