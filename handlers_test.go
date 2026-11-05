@@ -172,3 +172,37 @@ func TestThumbnailUploadFormErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestJSONBodyErrors(t *testing.T) {
+	cfg := newTestConfig(t)
+	_, token := newTestUser(t, cfg, "owner@example.com")
+
+	endpoints := []struct {
+		name, pattern, path string
+		h                   http.HandlerFunc
+	}{
+		{"create user", "POST /api/users", "/api/users", cfg.handlerUsersCreate},
+		{"login", "POST /api/login", "/api/login", cfg.handlerLogin},
+		{"create video", "POST /api/videos", "/api/videos", cfg.handlerVideoMetaCreate},
+	}
+	bodies := []struct {
+		name string
+		body string
+		want int
+	}{
+		{"malformed", `{"email": `, http.StatusBadRequest},
+		{"wrong type", `{"email": 42, "title": 42}`, http.StatusBadRequest},
+		{"empty", ``, http.StatusBadRequest},
+		{"over 1 MB", `{"email": "` + strings.Repeat("a", 1<<20) + `"}`, http.StatusRequestEntityTooLarge},
+	}
+	for _, ep := range endpoints {
+		for _, b := range bodies {
+			t.Run(ep.name+"/"+b.name, func(t *testing.T) {
+				req := httptest.NewRequest("POST", ep.path, strings.NewReader(b.body))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Authorization", "Bearer "+token)
+				assertJSONError(t, serve(ep.pattern, ep.h, req), b.want)
+			})
+		}
+	}
+}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -24,11 +23,8 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 	}
 
-	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+	if !decodeJSON(w, r, &params) {
 		return
 	}
 

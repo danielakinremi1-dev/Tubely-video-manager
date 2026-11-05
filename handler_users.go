@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
@@ -14,11 +13,8 @@ func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request)
 		Email    string `json:"email"`
 	}
 
-	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+	if !decodeJSON(w, r, &params) {
 		return
 	}
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -26,11 +25,8 @@ func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err = decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+	if !decodeJSON(w, r, &params) {
 		return
 	}
 	params.UserID = userID
