@@ -52,7 +52,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] Upload-path fixes needed for local testing: the `other/` key prefix, `getVideoAspectRatio` error handling (the `cmd.Run()` error, no streams, zero height, `-select_streams v:0`), and closing and removing the `.processing` file.
 - [x] `docker-compose.yml` with **`adobe/s3mock:5.2.3`** (Apache 2.0, no account, port 9090). It creates the bucket on startup with `COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS=tubely-local` and allows public reads, which is fine because it only runs locally. It is path-style only, so the local settings are `S3_FORCE_PATH_STYLE=true` and `MEDIA_BASE_URL=http://localhost:9090/tubely-local`.
 - [x] Verify that the emulator serves unsigned browser GETs and HTTP Range requests (needed for video seeking). If either fails, switch to SeaweedFS.
-- [ ] `.env.example` with working local defaults, plus a `Makefile` with `up`, `down`, `dev` and `test`.
+- [x] `.env.example` with working local defaults, plus a `Makefile` with `up`, `down`, `dev` and `test`.
 
 *Emulators not chosen:* LocalStack (new images require an auth token, which breaks "fresh clone just works" and would need a CI secret), MinIO (community edition archived, images removed), Garage (too much setup for local dev).
 

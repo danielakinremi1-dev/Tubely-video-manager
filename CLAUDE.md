@@ -8,7 +8,7 @@ If a `notes/` directory exists locally, read it for maintainer context. It is gi
 
 - Go (version in `go.mod`), standard-library `net/http` with method-pattern routing (`mux.HandleFunc("POST /api/...")`)
 - SQLite through `mattn/go-sqlite3`, which needs cgo. Until goose migrations land (Phase 1), the schema is auto-migrated in `internal/database/database.go`.
-- `aws-sdk-go-v2` for S3. Videos are served through CloudFront on AWS, or through a local S3 emulator in dev (Phase 0.5).
+- `aws-sdk-go-v2` for S3. Locally, `docker compose` runs `adobe/s3mock` on :9090 (path-style, no auth). On AWS, media is served through CloudFront. The DB stores object **keys**; public URLs are built at response time from `MEDIA_BASE_URL` (`withMediaURLs` in `media_url.go`).
 - `ffmpeg` and `ffprobe` must be on PATH. They handle fast-start remuxing and aspect-ratio detection.
 - Frontend: vanilla JS, HTML and CSS in `app/`, served at `/app/`. There is no build step.
 - Auth: argon2id password hashes, 1h JWT access tokens, and refresh tokens stored in the DB (`internal/auth`). The UI refreshes access tokens through `authFetch` in `app/app.js`.
@@ -16,9 +16,11 @@ If a `notes/` directory exists locally, read it for maintainer context. It is gi
 ## Commands
 
 ```bash
-cp .env.example .env        # then fill in the values
-go run .                    # serves http://localhost:$PORT/app/
-go build ./... && go vet ./... && go test ./...
+cp .env.example .env        # local defaults work as-is with the emulator
+make up                     # docker compose up -d (S3 emulator on :9090)
+go run .                    # serves http://localhost:$PORT/app/  (or: make dev)
+make check                  # go build ./... && go vet ./... && go test ./...
+make down                   # stop services; `docker compose down -v` wipes uploads
 ./samplesdownload.sh        # sample videos and images into samples/
 ```
 
@@ -28,7 +30,10 @@ go build ./... && go vet ./... && go test ./...
 
 - `main.go`: env/config loading, the `apiConfig` struct, routes
 - `handler_*.go`: one file per resource. Handlers are methods on `*apiConfig`.
-- `helper_functions_upload.go`: ffmpeg/ffprobe helpers, file extensions, assets dir
+- `helper_functions_upload.go`: ffmpeg/ffprobe helpers, file extensions, object key generation
+- `s3_client.go`: S3 client construction (endpoint/path-style) and object cleanup helpers
+- `media_url.go`: `MEDIA_BASE_URL` resolution and key → URL building
+- `docker-compose.yml`, `Makefile`: local services and shortcuts
 - `json.go`: `respondWithJSON` / `respondWithError`. Use these for every response.
 - `internal/database`: SQL by hand, with no ORM. Lookups return `database.ErrNotFound` when a row is missing.
 - `internal/auth`: JWT, refresh tokens, password hashing, bearer header parsing
