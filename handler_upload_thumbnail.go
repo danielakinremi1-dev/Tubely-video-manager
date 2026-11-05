@@ -79,14 +79,18 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	oldKey := videoMetadata.ThumbnailKey
 	videoMetadata.ThumbnailKey = &thumbnailKey
 
-	err = cfg.db.UpdateVideo(videoMetadata)
+	updated, err := cfg.db.UpdateVideo(videoMetadata)
 	if err != nil {
 		cfg.deleteObject(r.Context(), &thumbnailKey) // don't orphan the new upload
+		if errors.Is(err, database.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Video was deleted during upload", err)
+			return
+		}
 		respondWithError(w, http.StatusInternalServerError, "Unable to update video data", err)
 		return
 	}
 	cfg.replaceObject(r.Context(), oldKey, thumbnailKey)
 
-	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(videoMetadata))
+	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(updated))
 
 }

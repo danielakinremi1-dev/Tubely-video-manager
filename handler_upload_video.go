@@ -119,13 +119,17 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	oldKey := videoMetadata.VideoKey
 	videoMetadata.VideoKey = &fileKey
 
-	err = cfg.db.UpdateVideo(videoMetadata)
+	updated, err := cfg.db.UpdateVideo(videoMetadata)
 	if err != nil {
 		cfg.deleteObject(r.Context(), &fileKey) // don't orphan the new upload
+		if errors.Is(err, database.ErrNotFound) {
+			respondWithError(w, http.StatusNotFound, "Video was deleted during upload", err)
+			return
+		}
 		respondWithError(w, http.StatusInternalServerError, "Unable to update database video data", err)
 		return
 	}
 	cfg.replaceObject(r.Context(), oldKey, fileKey)
 
-	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(videoMetadata))
+	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(updated))
 }

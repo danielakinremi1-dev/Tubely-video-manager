@@ -220,6 +220,13 @@ func TestMigrationsRollBackAndReapply(t *testing.T) {
 	}
 }
 
+func TestUpdateVideoMissing(t *testing.T) {
+	c := newTestClient(t)
+	if _, err := c.UpdateVideo(Video{ID: uuid.New()}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestForeignKeysEnforced(t *testing.T) {
 	c := newTestClient(t)
 
@@ -285,12 +292,24 @@ func TestUpdateVideoPersistsKey(t *testing.T) {
 		t.Fatalf("CreateVideo: %v", err)
 	}
 
+	// Backdate the row so the bump is visible at second precision.
+	if _, err := c.db.Exec("UPDATE videos SET updated_at = '2000-01-01 00:00:00' WHERE id = ?", v.ID); err != nil {
+		t.Fatal(err)
+	}
+
 	key := "landscape/xyz.mp4"
 	thumb := "thumbnails/abc.png"
 	v.VideoKey = &key
 	v.ThumbnailKey = &thumb
-	if err := c.UpdateVideo(v); err != nil {
+	updated, err := c.UpdateVideo(v)
+	if err != nil {
 		t.Fatalf("UpdateVideo: %v", err)
+	}
+	if updated.UpdatedAt.Year() == 2000 {
+		t.Errorf("updated_at not bumped: %v", updated.UpdatedAt)
+	}
+	if !updated.CreatedAt.Equal(v.CreatedAt) {
+		t.Errorf("created_at changed: %v -> %v", v.CreatedAt, updated.CreatedAt)
 	}
 
 	videos, err := c.GetVideos(u.ID)

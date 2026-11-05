@@ -134,7 +134,9 @@ func (c Client) GetVideo(id uuid.UUID) (Video, error) {
 	return video, nil
 }
 
-func (c Client) UpdateVideo(video Video) error {
+// UpdateVideo saves the video's editable fields, bumps updated_at, and
+// returns the stored row. It returns ErrNotFound if the video is gone.
+func (c Client) UpdateVideo(video Video) (Video, error) {
 	query := `
 	UPDATE videos
 	SET
@@ -142,20 +144,27 @@ func (c Client) UpdateVideo(video Video) error {
 		description = ?,
 		thumbnail_key = ?,
 		video_key = ?,
-		user_id = ?
+		updated_at = CURRENT_TIMESTAMP
 	WHERE id = ?
 	`
 
-	_, err := c.db.Exec(
+	res, err := c.db.Exec(
 		query,
 		video.Title,
 		video.Description,
 		video.ThumbnailKey,
 		video.VideoKey,
-		video.UserID,
 		video.ID,
 	)
-	return err
+	if err != nil {
+		return Video{}, err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return Video{}, err
+	} else if n == 0 {
+		return Video{}, ErrNotFound
+	}
+	return c.GetVideo(video.ID)
 }
 
 func (c Client) DeleteVideo(id uuid.UUID) error {
