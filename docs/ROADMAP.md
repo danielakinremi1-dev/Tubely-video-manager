@@ -6,7 +6,7 @@ Tubely is being developed in phases from a single-binary course project into a p
 
 ## Architecture
 
-**Today:** one Go process. It handles auth, runs ffmpeg in the request path, and writes to S3. Thumbnails live on local disk. Full public CDN URLs are stored in SQLite.
+**Today (after Phase 1):** one Go process. It handles auth, validates uploads by their bytes, runs ffprobe and ffmpeg in the request path under timeouts, and sends videos and thumbnails to an S3-compatible bucket (the local emulator, or AWS), using multipart uploads for large files. SQLite stores object keys, not URLs, and its schema is versioned with goose. Handlers still call S3 and ffmpeg directly; Phase 2 puts them behind interfaces.
 
 **Target:**
 
@@ -40,7 +40,7 @@ Design rules the phases build toward:
 - [x] Removed the unused `lib/pq` import; `golang-jwt/jwt/v5` moved from a pre-release to stable
 - [x] Fixed the `DB_PATH` error message; removed a debug print
 
-## Phase 0.5: S3-compatible storage that runs locally
+## Phase 0.5: S3-compatible storage that runs locally ✅
 
 Uploads and playback currently depend on an AWS stack that no longer exists. This phase makes the storage backend configurable and runnable on a laptop.
 
@@ -58,7 +58,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 **Done when:** a fresh clone, then `cp .env.example .env && docker compose up && go run .`, gives a working upload and playback in the browser with no AWS credentials on the machine.
 
-## Phase 1: Upload pipeline correctness
+## Phase 1: Upload pipeline correctness ✅
 
 **Video upload**
 - [x] `exec.CommandContext` with a timeout for ffmpeg/ffprobe, with stderr captured in the returned error
