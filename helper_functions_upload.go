@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -38,17 +40,28 @@ func getVideoAspectRatio(filePath string) (string, error) {
 
 	videoInfo := VideoData{}
 
-	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
-	var b bytes.Buffer
-	cmd.Stdout = &b
-	cmd.Run()
-
-	err := json.Unmarshal(b.Bytes(), &videoInfo)
-	if err != nil {
-		return "", err
+	// Only look at the first video stream; an audio stream can come first.
+	cmd := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0",
+		"-print_format", "json", "-show_streams", filePath)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("ffprobe: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 
-	aspectRatio := float64(videoInfo.Streams[0].Width) / float64(videoInfo.Streams[0].Height)
+	if err := json.Unmarshal(stdout.Bytes(), &videoInfo); err != nil {
+		return "", fmt.Errorf("parse ffprobe output: %w", err)
+	}
+	if len(videoInfo.Streams) == 0 {
+		return "", errors.New("no video stream found")
+	}
+	stream := videoInfo.Streams[0]
+	if stream.Width <= 0 || stream.Height <= 0 {
+		return "", fmt.Errorf("invalid video dimensions %dx%d", stream.Width, stream.Height)
+	}
+
+	aspectRatio := float64(stream.Width) / float64(stream.Height)
 
 	if aspectRatio >= 1.72 && aspectRatio <= 1.84 {
 		return "16:9", nil
@@ -67,6 +80,7 @@ func processVideoForFastStart(filePath string) (string, error) {
 	cmd := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", newPath)
 	err := cmd.Run()
 	if err != nil {
+		os.Remove(newPath) // ffmpeg may leave a partial output file
 		return "", err
 	}
 

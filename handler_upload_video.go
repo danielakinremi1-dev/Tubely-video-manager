@@ -91,20 +91,21 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Unable to process video for fast start encoding", err)
 		return
 	}
+	defer os.Remove(tmpProcessed)
 
 	tmpProcessedFile, err := os.Open(tmpProcessed)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to open processed video", err)
 		return
 	}
-	tmpProcessedFile.Seek(0, io.SeekStart)
+	defer tmpProcessedFile.Close()
 
 	ext := getExtension(mediaType)
 	key := make([]byte, 32)
 	rand.Read(key)
 	randomBase := base64.RawURLEncoding.EncodeToString(key)
 
-	prefix := "other"
+	prefix := "other/"
 	aspectRatio, err := getVideoAspectRatio(tmp.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to parse video data: Aspect ratio", err)
