@@ -41,7 +41,7 @@ func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, video)
+	respondWithJSON(w, http.StatusCreated, cfg.withMediaURLs(video))
 }
 
 func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +102,7 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, videoMetadata)
+	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(videoMetadata))
 }
 
 func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
@@ -123,5 +123,8 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	for i := range videos {
+		videos[i] = cfg.withMediaURLs(videos[i])
+	}
 	respondWithJSON(w, http.StatusOK, videos)
 }

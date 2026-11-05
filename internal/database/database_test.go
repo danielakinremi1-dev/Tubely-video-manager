@@ -81,3 +81,77 @@ func TestGetVideoUnknown(t *testing.T) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
+
+func TestMigrationIsIdempotentAndBackfillsKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	c, err := NewClient(path)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	u := createTestUser(t, c)
+
+	legacy, err := c.CreateVideo(CreateVideoParams{Title: "legacy", UserID: u.ID})
+	if err != nil {
+		t.Fatalf("CreateVideo: %v", err)
+	}
+	broken, err := c.CreateVideo(CreateVideoParams{Title: "broken", UserID: u.ID})
+	if err != nil {
+		t.Fatalf("CreateVideo: %v", err)
+	}
+	// Simulate rows written before video_key existed.
+	for id, url := range map[string]string{
+		legacy.ID.String(): "https://dxxxx.cloudfront.net/portrait/abc.mp4",
+		broken.ID.String(): "not a url",
+	} {
+		if _, err := c.db.Exec("UPDATE videos SET video_url = ?, video_key = NULL WHERE id = ?", url, id); err != nil {
+			t.Fatalf("seed legacy row: %v", err)
+		}
+	}
+	c.db.Close()
+
+	// Re-opening runs the migration again: it must not fail, and it must
+	// backfill keys from legacy URLs.
+	c, err = NewClient(path)
+	if err != nil {
+		t.Fatalf("second NewClient: %v", err)
+	}
+	t.Cleanup(func() { c.db.Close() })
+
+	got, err := c.GetVideo(legacy.ID)
+	if err != nil {
+		t.Fatalf("GetVideo: %v", err)
+	}
+	if got.VideoKey == nil || *got.VideoKey != "portrait/abc.mp4" {
+		t.Errorf("legacy VideoKey = %v, want portrait/abc.mp4", got.VideoKey)
+	}
+	got, err = c.GetVideo(broken.ID)
+	if err != nil {
+		t.Fatalf("GetVideo: %v", err)
+	}
+	if got.VideoKey != nil {
+		t.Errorf("unparseable URL VideoKey = %q, want nil", *got.VideoKey)
+	}
+}
+
+func TestUpdateVideoPersistsKey(t *testing.T) {
+	c := newTestClient(t)
+	u := createTestUser(t, c)
+	v, err := c.CreateVideo(CreateVideoParams{Title: "t", UserID: u.ID})
+	if err != nil {
+		t.Fatalf("CreateVideo: %v", err)
+	}
+
+	key := "landscape/xyz.mp4"
+	v.VideoKey = &key
+	if err := c.UpdateVideo(v); err != nil {
+		t.Fatalf("UpdateVideo: %v", err)
+	}
+
+	videos, err := c.GetVideos(u.ID)
+	if err != nil {
+		t.Fatalf("GetVideos: %v", err)
+	}
+	if len(videos) != 1 || videos[0].VideoKey == nil || *videos[0].VideoKey != key {
+		t.Fatalf("GetVideos = %+v, want one video with key %q", videos, key)
+	}
+}

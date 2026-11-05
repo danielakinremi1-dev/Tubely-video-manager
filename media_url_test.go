@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/danielakinremi1-dev/tubely/internal/database"
+)
 
 func TestResolveMediaBaseURL(t *testing.T) {
 	tests := []struct {
@@ -31,5 +35,21 @@ func TestMediaURL(t *testing.T) {
 		if got, want := cfg.mediaURL(key), "http://localhost:9090/tubely-local/landscape/abc.mp4"; got != want {
 			t.Errorf("mediaURL(%q) = %q, want %q", key, got, want)
 		}
+	}
+}
+
+func TestWithMediaURLs(t *testing.T) {
+	cfg := apiConfig{mediaBaseURL: "http://localhost:9090/tubely-local"}
+	key := "portrait/abc.mp4"
+	legacy := "https://old.example.com/x.mp4"
+
+	got := cfg.withMediaURLs(database.Video{VideoKey: &key, VideoURL: &legacy})
+	if got.VideoURL == nil || *got.VideoURL != "http://localhost:9090/tubely-local/portrait/abc.mp4" {
+		t.Errorf("with key: VideoURL = %v", got.VideoURL)
+	}
+
+	got = cfg.withMediaURLs(database.Video{VideoURL: &legacy})
+	if got.VideoURL == nil || *got.VideoURL != legacy {
+		t.Errorf("without key: VideoURL = %v, want legacy %q", got.VideoURL, legacy)
 	}
 }

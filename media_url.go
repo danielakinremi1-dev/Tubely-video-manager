@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"strings"
+
+	"github.com/danielakinremi1-dev/tubely/internal/database"
 )
 
 // resolveMediaBaseURL picks the public base URL that object keys are served
@@ -22,4 +24,14 @@ func resolveMediaBaseURL(mediaBaseURL, cfDistribution string) (string, error) {
 // mediaURL returns the public URL for an object key.
 func (cfg *apiConfig) mediaURL(key string) string {
 	return cfg.mediaBaseURL + "/" + strings.TrimLeft(key, "/")
+}
+
+// withMediaURLs fills in the public URLs for a video from its stored object
+// keys. Rows without a key keep their legacy stored URL.
+func (cfg *apiConfig) withMediaURLs(v database.Video) database.Video {
+	if v.VideoKey != nil && *v.VideoKey != "" {
+		u := cfg.mediaURL(*v.VideoKey)
+		v.VideoURL = &u
+	}
+	return v
 }

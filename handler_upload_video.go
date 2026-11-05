@@ -130,8 +130,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	newURL := cfg.mediaURL(fileKey)
-	videoMetadata.VideoURL = &newURL
+	videoMetadata.VideoKey = &fileKey
 
 	err = cfg.db.UpdateVideo(videoMetadata)
 	if err != nil {
@@ -139,5 +138,5 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, videoMetadata)
+	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(videoMetadata))
 }
