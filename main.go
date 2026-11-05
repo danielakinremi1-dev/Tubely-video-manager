@@ -15,16 +15,16 @@ import (
 )
 
 type apiConfig struct {
-	db               database.Client
-	jwtSecret        string
-	platform         string
-	filepathRoot     string
-	assetsRoot       string
-	s3Bucket         string
-	s3Region         string
-	s3CfDistribution string
-	port             string
-	s3Client         *s3.Client
+	db           database.Client
+	jwtSecret    string
+	platform     string
+	filepathRoot string
+	assetsRoot   string
+	s3Bucket     string
+	s3Region     string
+	mediaBaseURL string
+	port         string
+	s3Client     *s3.Client
 }
 
 type thumbnail struct {
@@ -75,9 +75,10 @@ func main() {
 		log.Fatal("S3_REGION environment variable is not set")
 	}
 
-	s3CfDistribution := os.Getenv("S3_CF_DISTRO")
-	if s3CfDistribution == "" {
-		log.Fatal("S3_CF_DISTRO environment variable is not set")
+	// Public base URL that stored object keys are served from.
+	mediaBaseURL, err := resolveMediaBaseURL(os.Getenv("MEDIA_BASE_URL"), os.Getenv("S3_CF_DISTRO"))
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	port := os.Getenv("PORT")
@@ -103,16 +104,16 @@ func main() {
 	}
 
 	cfg := apiConfig{
-		db:               db,
-		jwtSecret:        jwtSecret,
-		platform:         platform,
-		filepathRoot:     filepathRoot,
-		assetsRoot:       assetsRoot,
-		s3Bucket:         s3Bucket,
-		s3Region:         s3Region,
-		s3CfDistribution: s3CfDistribution,
-		s3Client:         s3Client,
-		port:             port,
+		db:           db,
+		jwtSecret:    jwtSecret,
+		platform:     platform,
+		filepathRoot: filepathRoot,
+		assetsRoot:   assetsRoot,
+		s3Bucket:     s3Bucket,
+		s3Region:     s3Region,
+		mediaBaseURL: mediaBaseURL,
+		s3Client:     s3Client,
+		port:         port,
 	}
 
 	err = cfg.ensureAssetsDir()

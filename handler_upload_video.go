@@ -130,7 +130,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	newURL := fmt.Sprintf("https://%v/%v", cfg.s3CfDistribution, fileKey)
+	newURL := cfg.mediaURL(fileKey)
 	videoMetadata.VideoURL = &newURL
 
 	err = cfg.db.UpdateVideo(videoMetadata)

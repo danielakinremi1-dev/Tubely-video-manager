@@ -45,7 +45,7 @@ Design rules the phases build toward:
 Uploads and playback currently depend on an AWS stack that no longer exists. This phase makes the storage backend configurable and runnable on a laptop.
 
 - [x] Configurable S3 client: optional `S3_ENDPOINT` and `S3_FORCE_PATH_STYLE`, set through `s3.Options.BaseEndpoint` / `UsePathStyle`. Empty means real AWS.
-- [ ] `MEDIA_BASE_URL` for public playback URLs. It falls back to `https://$S3_CF_DISTRO`, and `S3_CF_DISTRO` becomes optional.
+- [x] `MEDIA_BASE_URL` for public playback URLs. It falls back to `https://$S3_CF_DISTRO`, and `S3_CF_DISTRO` becomes optional.
 - [ ] Store object keys instead of URLs: add a `video_key` column (a guarded `ALTER TABLE`, because the current migration only creates tables), backfill keys from existing URL paths, and build URLs at response time.
 - [ ] Thumbnails go into the same bucket under `thumbnails/`. Remove the local `assets/` storage and the hard-coded `http://localhost` URL.
 - [ ] Deleting a video removes its video and thumbnail objects, and a re-upload removes the previous object. Storage errors are logged, and the row is still deleted.
