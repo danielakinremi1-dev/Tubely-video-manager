@@ -77,7 +77,6 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] Turn on SQLite foreign-key enforcement (`_foreign_keys=on`)
 - [x] `UpdateVideo` sets `updated_at` and stops passing pointer-to-pointer arguments
 - [x] Versioned migrations with goose. The baseline matches the current schema, including `video_key`.
-- [ ] *Optional:* PostgreSQL + sqlc behind a `database` interface
 
 **Request handling**
 - [x] JSON decode errors return 400
@@ -87,22 +86,26 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 ## Phase 2: Structure and operability
 
+**Start here** when resuming. Boxes are in commit order: the interfaces come before the package split, so each diff stays small.
+
 **Structure**
-- [ ] Split into `cmd/tubely`, `internal/api`, `internal/auth`, `internal/database`, `internal/storage` (interface) and `internal/media` (interface)
-- [ ] `requireAuth` middleware that puts the user ID into the request context (it replaces six copies of the JWT parsing)
+- [ ] `storage` interface (`Put`, `Delete`) with the S3 implementation and an in-memory fake
+- [ ] `media` interface (`Probe`, `FastStart`) with the ffmpeg implementation, a pure aspect-ratio classifier and a fake
+- [ ] Split into `cmd/tubely`, `internal/api`, `internal/storage` and `internal/media`, next to the existing `internal/auth` and `internal/database`
+- [ ] `requireAuth` middleware that puts the user ID into the request context (it replaces five copies of the JWT parsing), and pin the JWT signing method to HS256
 
 **Operations**
-- [ ] `http.Server` timeouts, with longer limits for the upload routes
+- [ ] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
 - [ ] Graceful shutdown on SIGINT/SIGTERM
 - [ ] `log/slog` structured logging, request-ID middleware and panic recovery
 - [ ] Startup check that ffmpeg/ffprobe are on PATH, plus `GET /api/healthz`
 
 **Tests and packaging**
-- [ ] Unit tests: `getExtension`, the aspect-ratio classifier (as a pure function) and the auth helpers
-- [ ] Handler tests with `httptest` and fake storage/media implementations
-- [ ] A small sample mp4 in `testdata/` for ffprobe tests
-- [ ] Multi-stage `Dockerfile` with ffmpeg, and an `app` service in compose
-- [ ] `make lint`
+- [ ] Unit tests: `getExtension`, the aspect-ratio classifier and the auth helpers
+- [ ] Handler tests with `httptest` and the fake storage/media implementations
+- [ ] Small sample MP4s in `testdata/` for the ffprobe tests
+- [ ] Multi-stage `Dockerfile` with ffmpeg, an `app` service in compose, and `scripts/smoke.sh` (the end-to-end upload check)
+- [ ] `make lint` (golangci-lint)
 
 **Done when:** handlers have no direct AWS or ffmpeg calls, and `go test ./...` covers the main upload path without network access.
 
@@ -131,6 +134,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 ## Later
 
+- [ ] PostgreSQL + sqlc behind a `database` interface (deferred from Phase 1)
 - [ ] Asynchronous processing: the upload returns `202 Accepted`, and a worker pool runs ffprobe/ffmpeg and the upload with retries (`processing → ready | failed`). The UI polls for status.
 - [ ] Direct-to-S3 uploads with presigned PUT URLs, so large files never pass through the API
 - [ ] Automatic thumbnail generation with ffmpeg when none is uploaded
