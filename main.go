@@ -1,13 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
-	"context"
-
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/danielakinremi1-dev/tubely/internal/database"
@@ -86,12 +85,22 @@ func main() {
 		log.Fatal("PORT environment variable is not set")
 	}
 
-	s3Config, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(s3Region))
+	// Optional: point at an S3-compatible endpoint (e.g. a local emulator).
+	// Leave unset to use real AWS S3.
+	s3Endpoint := os.Getenv("S3_ENDPOINT")
+
+	s3ForcePathStyle := false
+	if v := os.Getenv("S3_FORCE_PATH_STYLE"); v != "" {
+		s3ForcePathStyle, err = strconv.ParseBool(v)
+		if err != nil {
+			log.Fatalf("S3_FORCE_PATH_STYLE must be a boolean: %v", err)
+		}
+	}
+
+	s3Client, err := newS3Client(context.Background(), s3Region, s3Endpoint, s3ForcePathStyle)
 	if err != nil {
 		log.Fatalf("Couldn't setup AWS configuration: %v", err)
 	}
-
-	s3Client := s3.NewFromConfig(s3Config)
 
 	cfg := apiConfig{
 		db:               db,
