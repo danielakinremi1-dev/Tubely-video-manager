@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,8 +60,8 @@ func (c Client) GetRefreshToken(token string) (RefreshToken, error) {
 	err := c.db.QueryRow(query, token).
 		Scan(&rt.Token, &rt.CreatedAt, &rt.UpdatedAt, &userID, &rt.ExpiresAt, &rt.RevokedAt)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return RefreshToken{}, nil
+		if errors.Is(err, sql.ErrNoRows) {
+			return RefreshToken{}, ErrNotFound
 		}
 		return RefreshToken{}, err
 	}

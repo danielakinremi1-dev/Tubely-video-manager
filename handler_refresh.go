@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
+	"github.com/danielakinremi1-dev/tubely/internal/database"
 )
 
 func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
@@ -19,8 +21,11 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := cfg.db.GetUserByRefreshToken(refreshToken)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't get user for refresh token", err)
+	if errors.Is(err, database.ErrNotFound) {
+		respondWithError(w, http.StatusUnauthorized, "Invalid refresh token", err)
+		return
+	} else if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get user for refresh token", err)
 		return
 	}
 
