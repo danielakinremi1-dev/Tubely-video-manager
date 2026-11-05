@@ -57,7 +57,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
 	if mediaType == "" {
-		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for thumbnail", nil)
+		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for video", nil)
 		return
 	} else if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Error parsing media type", err)

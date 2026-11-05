@@ -65,7 +65,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] Use `r.Context()` for S3 calls so a cancelled request stops the upload
 - [x] `uuid.NewString()` for object keys instead of unchecked `rand.Read`
 - [x] Ownership mismatch returns 403 with a JSON error, not 401 with `{}`
-- [ ] Fix the "Missing Content-Type for thumbnail" message in the video handler
+- [x] Fix the "Missing Content-Type for thumbnail" message in the video handler
 - [ ] Sniff the real content type (`http.DetectContentType`) instead of trusting the client header
 - [ ] S3 upload manager (`feature/s3/manager`) for multipart uploads of large files
 
