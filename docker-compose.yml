@@ -1,0 +1,26 @@
+# Local development services. Start with `docker compose up -d` (or `make up`).
+#
+# s3: an S3-compatible emulator (adobe/s3mock, Apache 2.0, no account needed).
+# The app talks to it via S3_ENDPOINT=http://localhost:9090 with path-style
+# addressing, and the browser plays media from
+# MEDIA_BASE_URL=http://localhost:9090/tubely-local.
+#
+# S3Mock doesn't enforce authentication, so every object is publicly
+# readable. That's intended here: it only ever runs on your machine. Real AWS
+# uses a private bucket behind CloudFront (see docs/ROADMAP.md, Phase 3).
+services:
+  s3:
+    image: adobe/s3mock:5.2.3
+    ports:
+      - "9090:9090"
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: tubely-local
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+    volumes:
+      - s3data:/s3mockroot
+
+volumes:
+  # Uploaded objects survive `docker compose down`; `docker compose down -v`
+  # wipes them.
+  s3data:
