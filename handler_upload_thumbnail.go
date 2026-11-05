@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"mime"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -46,22 +45,20 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	const maxMemory = 10 << 20
 	r.ParseMultipartForm(maxMemory)
 
-	reqFile, header, err := r.FormFile("thumbnail")
+	reqFile, _, err := r.FormFile("thumbnail")
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
 		return
 	}
 	defer reqFile.Close()
 
-	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
-	if mediaType == "" {
-		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for thumbnail", nil)
+	mediaType, err := sniffMediaType(reqFile)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to read uploaded file", err)
 		return
-	} else if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Error parsing media type", err)
-		return
-	} else if mediaType != "image/png" && mediaType != "image/jpeg" {
-		respondWithError(w, http.StatusBadRequest, "Invalid media type uploaded", nil)
+	}
+	if mediaType != "image/png" && mediaType != "image/jpeg" {
+		respondWithError(w, http.StatusUnsupportedMediaType, "Thumbnail must be a PNG or JPEG image (got "+mediaType+")", nil)
 		return
 	}
 	fileExtension := getExtension(mediaType)

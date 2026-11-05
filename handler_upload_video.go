@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"os"
 
@@ -48,22 +47,20 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	f, header, err := r.FormFile("video")
+	f, _, err := r.FormFile("video")
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
 		return
 	}
 	defer f.Close()
 
-	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
-	if mediaType == "" {
-		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for video", nil)
+	mediaType, err := sniffMediaType(f)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to read uploaded file", err)
 		return
-	} else if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Error parsing media type", err)
-		return
-	} else if mediaType != "video/mp4" {
-		respondWithError(w, http.StatusBadRequest, "Invalid media type uploaded", nil)
+	}
+	if mediaType != "video/mp4" {
+		respondWithError(w, http.StatusUnsupportedMediaType, "Video must be an MP4 file (got "+mediaType+")", nil)
 		return
 	}
 

@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -50,6 +53,27 @@ func runTool(ctx context.Context, timeout time.Duration, name string, args ...st
 // random bits from crypto/rand, so keys are unguessable and never collide.
 func newObjectKey(prefix, ext string) string {
 	return prefix + uuid.NewString() + ext
+}
+
+// sniffMediaType returns a file's type as detected from its first 512 bytes
+// (the WHATWG MIME-sniffing algorithm behind http.DetectContentType) and
+// rewinds the file. Validation then depends on the bytes, not on the
+// client-supplied Content-Type, which anyone can set to anything.
+func sniffMediaType(f io.ReadSeeker) (string, error) {
+	buf := make([]byte, 512)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return "", fmt.Errorf("read file header: %w", err)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("rewind file: %w", err)
+	}
+	// Drop parameters such as "; charset=utf-8".
+	mediaType, _, err := mime.ParseMediaType(http.DetectContentType(buf[:n]))
+	if err != nil {
+		return "", fmt.Errorf("parse detected type: %w", err)
+	}
+	return mediaType, nil
 }
 
 func getExtension(mediaType string) string {

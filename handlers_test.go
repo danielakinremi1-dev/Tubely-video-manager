@@ -114,3 +114,29 @@ func TestUploadOwnershipIsForbidden(t *testing.T) {
 		})
 	}
 }
+
+func TestUploadRejectsSpoofedContentType(t *testing.T) {
+	cfg := newTestConfig(t)
+	owner, token := newTestUser(t, cfg, "owner@example.com")
+	video := newTestVideo(t, cfg, owner)
+
+	cases := []struct {
+		name, pattern, path, field, claimed string
+		data                                []byte
+		h                                   http.HandlerFunc
+	}{
+		{"pdf claiming mp4", "POST /api/video_upload/{videoID}", "/api/video_upload/", "video", "video/mp4",
+			[]byte("%PDF-1.4\n%fake"), cfg.handlerUploadVideo},
+		{"gif claiming png", "POST /api/thumbnail_upload/{videoID}", "/api/thumbnail_upload/", "thumbnail", "image/png",
+			[]byte("GIF89a\x01\x00\x01\x00"), cfg.handlerUploadThumbnail},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, ctype := multipartBody(t, tc.field, tc.claimed, tc.data)
+			req := httptest.NewRequest("POST", tc.path+video.ID.String(), body)
+			req.Header.Set("Content-Type", ctype)
+			req.Header.Set("Authorization", "Bearer "+token)
+			assertJSONError(t, serve(tc.pattern, tc.h, req), http.StatusUnsupportedMediaType)
+		})
+	}
+}
