@@ -79,11 +79,13 @@ func (c Client) GetUserByRefreshToken(token string) (*User, error) {
 		FROM users u
 		JOIN refresh_tokens rt ON u.id = rt.user_id
 		WHERE rt.token = ?
+		  AND rt.revoked_at IS NULL
+		  AND rt.expires_at > ?
 	`
 
 	var user User
 	var id string
-	err := c.db.QueryRow(query, token).Scan(&id, &user.Email, &user.CreatedAt, &user.UpdatedAt, &user.Password)
+	err := c.db.QueryRow(query, token, time.Now().UTC()).Scan(&id, &user.Email, &user.CreatedAt, &user.UpdatedAt, &user.Password)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
