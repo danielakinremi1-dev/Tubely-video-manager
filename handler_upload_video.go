@@ -130,13 +130,16 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	oldKey := videoMetadata.VideoKey
 	videoMetadata.VideoKey = &fileKey
 
 	err = cfg.db.UpdateVideo(videoMetadata)
 	if err != nil {
+		cfg.deleteObject(r.Context(), &fileKey) // don't orphan the new upload
 		respondWithError(w, http.StatusInternalServerError, "Unable to update database video data", err)
 		return
 	}
+	cfg.replaceObject(r.Context(), oldKey, fileKey)
 
 	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(videoMetadata))
 }

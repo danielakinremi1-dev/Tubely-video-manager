@@ -82,6 +82,11 @@ func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Remove the row first, then its objects: if storage cleanup fails we
+	// leave a logged orphan object, never a row pointing at a missing file.
+	cfg.deleteObject(r.Context(), video.VideoKey)
+	cfg.deleteObject(r.Context(), video.ThumbnailKey)
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
