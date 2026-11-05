@@ -1,16 +1,11 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
-	"fmt"
-	"io"
 	"mime"
 	"net/http"
-	"os"
-	"path/filepath"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/google/uuid"
@@ -71,26 +66,24 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	key := make([]byte, 32)
-	rand.Read(key)
-	randomBase := base64.RawURLEncoding.EncodeToString(key)
-
-	assetPath := randomBase + fileExtension
-	baseURL := filepath.Join(cfg.assetsRoot, assetPath)
-	newFile, err := os.Create(baseURL)
+	thumbnailKey, err := newObjectKey("thumbnails/", fileExtension)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to create video file", err)
+		respondWithError(w, http.StatusInternalServerError, "Unable to generate thumbnail key", err)
 		return
 	}
 
-	_, err = io.Copy(newFile, reqFile)
+	// The multipart file is seekable, which S3 signing over plain http needs.
+	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
+		Bucket:      &cfg.s3Bucket,
+		Key:         &thumbnailKey,
+		Body:        reqFile,
+		ContentType: &mediaType,
+	})
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to copy request data to video file", err)
+		respondWithError(w, http.StatusInternalServerError, "Unable to upload thumbnail", err)
 		return
 	}
-
-	thumbnailURL := fmt.Sprintf("http://localhost:%v/assets/%v", cfg.port, assetPath)
-	videoMetadata.ThumbnailURL = &thumbnailURL
+	videoMetadata.ThumbnailKey = &thumbnailKey
 
 	err = cfg.db.UpdateVideo(videoMetadata)
 	if err != nil {

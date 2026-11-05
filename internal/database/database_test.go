@@ -142,7 +142,9 @@ func TestUpdateVideoPersistsKey(t *testing.T) {
 	}
 
 	key := "landscape/xyz.mp4"
+	thumb := "thumbnails/abc.png"
 	v.VideoKey = &key
+	v.ThumbnailKey = &thumb
 	if err := c.UpdateVideo(v); err != nil {
 		t.Fatalf("UpdateVideo: %v", err)
 	}
@@ -153,5 +155,8 @@ func TestUpdateVideoPersistsKey(t *testing.T) {
 	}
 	if len(videos) != 1 || videos[0].VideoKey == nil || *videos[0].VideoKey != key {
 		t.Fatalf("GetVideos = %+v, want one video with key %q", videos, key)
+	}
+	if videos[0].ThumbnailKey == nil || *videos[0].ThumbnailKey != thumb {
+		t.Fatalf("ThumbnailKey = %v, want %q", videos[0].ThumbnailKey, thumb)
 	}
 }

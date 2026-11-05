@@ -19,17 +19,11 @@ type apiConfig struct {
 	jwtSecret    string
 	platform     string
 	filepathRoot string
-	assetsRoot   string
 	s3Bucket     string
 	s3Region     string
 	mediaBaseURL string
 	port         string
 	s3Client     *s3.Client
-}
-
-type thumbnail struct {
-	data      []byte
-	mediaType string
 }
 
 func main() {
@@ -58,11 +52,6 @@ func main() {
 	filepathRoot := os.Getenv("FILEPATH_ROOT")
 	if filepathRoot == "" {
 		log.Fatal("FILEPATH_ROOT environment variable is not set")
-	}
-
-	assetsRoot := os.Getenv("ASSETS_ROOT")
-	if assetsRoot == "" {
-		log.Fatal("ASSETS_ROOT environment variable is not set")
 	}
 
 	s3Bucket := os.Getenv("S3_BUCKET")
@@ -108,7 +97,6 @@ func main() {
 		jwtSecret:    jwtSecret,
 		platform:     platform,
 		filepathRoot: filepathRoot,
-		assetsRoot:   assetsRoot,
 		s3Bucket:     s3Bucket,
 		s3Region:     s3Region,
 		mediaBaseURL: mediaBaseURL,
@@ -116,17 +104,9 @@ func main() {
 		port:         port,
 	}
 
-	err = cfg.ensureAssetsDir()
-	if err != nil {
-		log.Fatalf("Couldn't create assets directory: %v", err)
-	}
-
 	mux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
 	mux.Handle("/app/", appHandler)
-
-	assetsHandler := http.StripPrefix("/assets", http.FileServer(http.Dir(assetsRoot)))
-	mux.Handle("/assets/", noCacheMiddleware(assetsHandler))
 
 	mux.HandleFunc("POST /api/login", cfg.handlerLogin)
 	mux.HandleFunc("POST /api/refresh", cfg.handlerRefresh)

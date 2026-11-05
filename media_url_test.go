@@ -52,4 +52,10 @@ func TestWithMediaURLs(t *testing.T) {
 	if got.VideoURL == nil || *got.VideoURL != legacy {
 		t.Errorf("without key: VideoURL = %v, want legacy %q", got.VideoURL, legacy)
 	}
+
+	thumb := "thumbnails/t.png"
+	got = cfg.withMediaURLs(database.Video{ThumbnailKey: &thumb})
+	if got.ThumbnailURL == nil || *got.ThumbnailURL != "http://localhost:9090/tubely-local/thumbnails/t.png" {
+		t.Errorf("thumbnail: ThumbnailURL = %v", got.ThumbnailURL)
+	}
 }

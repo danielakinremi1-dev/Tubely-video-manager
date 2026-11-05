@@ -14,9 +14,11 @@ type Video struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	ThumbnailURL *string   `json:"thumbnail_url"`
 	VideoURL     *string   `json:"video_url"`
-	// VideoKey is the object key in the media bucket. The public VideoURL is
-	// built from it at response time; video_url is legacy and read-only.
-	VideoKey *string `json:"-"`
+	// VideoKey and ThumbnailKey are object keys in the media bucket. The
+	// public URLs are built from them at response time; the video_url and
+	// thumbnail_url columns are legacy and read-only.
+	VideoKey     *string `json:"-"`
+	ThumbnailKey *string `json:"-"`
 	CreateVideoParams
 }
 
@@ -35,6 +37,7 @@ func (c Client) GetVideos(userID uuid.UUID) ([]Video, error) {
 		title,
 		description,
 		thumbnail_url,
+		thumbnail_key,
 		video_url,
 		video_key,
 		user_id
@@ -59,6 +62,7 @@ func (c Client) GetVideos(userID uuid.UUID) ([]Video, error) {
 			&video.Title,
 			&video.Description,
 			&video.ThumbnailURL,
+			&video.ThumbnailKey,
 			&video.VideoURL,
 			&video.VideoKey,
 			&video.UserID,
@@ -100,6 +104,7 @@ func (c Client) GetVideo(id uuid.UUID) (Video, error) {
 		title,
 		description,
 		thumbnail_url,
+		thumbnail_key,
 		video_url,
 		video_key,
 		user_id
@@ -115,6 +120,7 @@ func (c Client) GetVideo(id uuid.UUID) (Video, error) {
 		&video.Title,
 		&video.Description,
 		&video.ThumbnailURL,
+		&video.ThumbnailKey,
 		&video.VideoURL,
 		&video.VideoKey,
 		&video.UserID)
@@ -134,7 +140,7 @@ func (c Client) UpdateVideo(video Video) error {
 	SET
 		title = ?,
 		description = ?,
-		thumbnail_url = ?,
+		thumbnail_key = ?,
 		video_key = ?,
 		user_id = ?
 	WHERE id = ?
@@ -144,7 +150,7 @@ func (c Client) UpdateVideo(video Video) error {
 		query,
 		video.Title,
 		video.Description,
-		&video.ThumbnailURL,
+		video.ThumbnailKey,
 		video.VideoKey,
 		video.UserID,
 		video.ID,

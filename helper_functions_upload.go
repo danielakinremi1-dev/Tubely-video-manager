@@ -2,17 +2,22 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
-	"os"
+	"fmt"
 	"os/exec"
 	"strings"
 )
 
-func (cfg apiConfig) ensureAssetsDir() error {
-	if _, err := os.Stat(cfg.assetsRoot); os.IsNotExist(err) {
-		return os.Mkdir(cfg.assetsRoot, 0755)
+// newObjectKey returns a random, URL-safe object key such as
+// "thumbnails/<43 random chars>.png".
+func newObjectKey(prefix, ext string) (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate object key: %w", err)
 	}
-	return nil
+	return prefix + base64.RawURLEncoding.EncodeToString(b) + ext, nil
 }
 
 func getExtension(mediaType string) string {

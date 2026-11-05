@@ -84,6 +84,9 @@ func (c *Client) autoMigrate() error {
 	if err := c.addColumnIfMissing("videos", "video_key", "TEXT"); err != nil {
 		return err
 	}
+	if err := c.addColumnIfMissing("videos", "thumbnail_key", "TEXT"); err != nil {
+		return err
+	}
 	return c.backfillVideoKeys()
 }
 

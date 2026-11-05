@@ -33,5 +33,9 @@ func (cfg *apiConfig) withMediaURLs(v database.Video) database.Video {
 		u := cfg.mediaURL(*v.VideoKey)
 		v.VideoURL = &u
 	}
+	if v.ThumbnailKey != nil && *v.ThumbnailKey != "" {
+		u := cfg.mediaURL(*v.ThumbnailKey)
+		v.ThumbnailURL = &u
+	}
 	return v
 }

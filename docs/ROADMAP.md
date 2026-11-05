@@ -47,7 +47,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] Configurable S3 client: optional `S3_ENDPOINT` and `S3_FORCE_PATH_STYLE`, set through `s3.Options.BaseEndpoint` / `UsePathStyle`. Empty means real AWS.
 - [x] `MEDIA_BASE_URL` for public playback URLs. It falls back to `https://$S3_CF_DISTRO`, and `S3_CF_DISTRO` becomes optional.
 - [x] Store object keys instead of URLs: add a `video_key` column (a guarded `ALTER TABLE`, because the current migration only creates tables), backfill keys from existing URL paths, and build URLs at response time.
-- [ ] Thumbnails go into the same bucket under `thumbnails/`. Remove the local `assets/` storage and the hard-coded `http://localhost` URL.
+- [x] Thumbnails go into the same bucket under `thumbnails/`. Remove the local `assets/` storage and the hard-coded `http://localhost` URL.
 - [ ] Deleting a video removes its video and thumbnail objects, and a re-upload removes the previous object. Storage errors are logged, and the row is still deleted.
 - [ ] Upload-path fixes needed for local testing: the `other/` key prefix, `getVideoAspectRatio` error handling (the `cmd.Run()` error, no streams, zero height, `-select_streams v:0`), and closing and removing the `.processing` file.
 - [ ] `docker-compose.yml` with **`adobe/s3mock:5.2.3`** (Apache 2.0, no account, port 9090). It creates the bucket on startup with `COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS=tubely-local` and allows public reads, which is fine because it only runs locally. It is path-style only, so the local settings are `S3_FORCE_PATH_STYLE=true` and `MEDIA_BASE_URL=http://localhost:9090/tubely-local`.
