@@ -78,6 +78,24 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Probe first: it's cheap, and it rejects files that aren't playable
+	// video before the remux spends time on them.
+	prefix := "other/"
+	aspectRatio, err := getVideoAspectRatio(r.Context(), tmp.Name())
+	if errors.Is(err, errInvalidMedia) {
+		respondWithError(w, http.StatusUnprocessableEntity, "File is not a playable video", err)
+		return
+	} else if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to read video metadata", err)
+		return
+	}
+
+	if aspectRatio == "16:9" {
+		prefix = "landscape/"
+	} else if aspectRatio == "9:16" {
+		prefix = "portrait/"
+	}
+
 	tmpProcessed, err := processVideoForFastStart(r.Context(), tmp.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to process video for fast start encoding", err)
@@ -91,19 +109,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	defer tmpProcessedFile.Close()
-
-	prefix := "other/"
-	aspectRatio, err := getVideoAspectRatio(r.Context(), tmp.Name())
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to parse video data: Aspect ratio", err)
-		return
-	}
-
-	if aspectRatio == "16:9" {
-		prefix = "landscape/"
-	} else if aspectRatio == "9:16" {
-		prefix = "portrait/"
-	}
 
 	fileKey := newObjectKey(prefix, getExtension(mediaType))
 

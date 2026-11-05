@@ -74,6 +74,9 @@ func TestGetVideoAspectRatio(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
+			if tt.wantErr && !errors.Is(err, errInvalidMedia) {
+				t.Errorf("err = %v, want it to wrap errInvalidMedia", err)
+			}
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -246,4 +247,21 @@ func TestCreateVideoValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A file that sniffs as MP4 but isn't playable is the client's problem.
+func TestVideoUploadRejectsCorruptMP4(t *testing.T) {
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe not on PATH")
+	}
+	cfg := newTestConfig(t)
+	owner, token := newTestUser(t, cfg, "owner@example.com")
+	video := newTestVideo(t, cfg, owner)
+
+	corrupt := append([]byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"), bytes.Repeat([]byte{0xAB}, 4096)...)
+	body, ctype := multipartBody(t, "video", "video/mp4", corrupt)
+	req := httptest.NewRequest("POST", "/api/video_upload/"+video.ID.String(), body)
+	req.Header.Set("Content-Type", ctype)
+	req.Header.Set("Authorization", "Bearer "+token)
+	assertJSONError(t, serve("POST /api/video_upload/{videoID}", cfg.handlerUploadVideo, req), http.StatusUnprocessableEntity)
 }

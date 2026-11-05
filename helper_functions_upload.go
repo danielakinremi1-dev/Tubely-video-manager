@@ -95,6 +95,12 @@ func getExtension(mediaType string) string {
 	return "." + extensions[1]
 }
 
+// errInvalidMedia marks a file the media tools rejected: the client's
+// problem (422), unlike a missing binary or a timeout (500).
+var errInvalidMedia = errors.New("not a playable video")
+
+// getVideoAspectRatio probes the first video stream. Errors wrap
+// errInvalidMedia when ffprobe rejected the file itself.
 func getVideoAspectRatio(ctx context.Context, filePath string) (string, error) {
 	type VideoData struct {
 		Streams []struct {
@@ -109,6 +115,10 @@ func getVideoAspectRatio(ctx context.Context, filePath string) (string, error) {
 	out, err := runTool(ctx, ffprobeTimeout, "ffprobe", "-v", "error", "-select_streams", "v:0",
 		"-print_format", "json", "-show_streams", filePath)
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", fmt.Errorf("%w: %w", errInvalidMedia, err)
+		}
 		return "", err
 	}
 
@@ -116,11 +126,11 @@ func getVideoAspectRatio(ctx context.Context, filePath string) (string, error) {
 		return "", fmt.Errorf("parse ffprobe output: %w", err)
 	}
 	if len(videoInfo.Streams) == 0 {
-		return "", errors.New("no video stream found")
+		return "", fmt.Errorf("%w: no video stream found", errInvalidMedia)
 	}
 	stream := videoInfo.Streams[0]
 	if stream.Width <= 0 || stream.Height <= 0 {
-		return "", fmt.Errorf("invalid video dimensions %dx%d", stream.Width, stream.Height)
+		return "", fmt.Errorf("%w: invalid video dimensions %dx%d", errInvalidMedia, stream.Width, stream.Height)
 	}
 
 	aspectRatio := float64(stream.Width) / float64(stream.Height)
