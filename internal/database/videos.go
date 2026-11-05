@@ -113,7 +113,7 @@ func (c Client) GetVideo(id uuid.UUID) (Video, error) {
 		&video.UserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return Video{}, nil
+			return Video{}, ErrNotFound
 		}
 		return Video{}, err
 	}

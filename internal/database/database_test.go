@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func newTestClient(t *testing.T) Client {
@@ -69,5 +71,13 @@ func TestGetUserByRefreshTokenValidity(t *testing.T) {
 		if _, err := c.GetUserByRefreshToken(token); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s token: err = %v, want ErrNotFound", token, err)
 		}
+	}
+}
+
+func TestGetVideoUnknown(t *testing.T) {
+	c := newTestClient(t)
+
+	if _, err := c.GetVideo(uuid.New()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }

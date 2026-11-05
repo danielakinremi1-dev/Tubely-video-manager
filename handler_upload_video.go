@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
+	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -39,7 +41,10 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	videoMetadata, err := cfg.db.GetVideo(videoID)
-	if err != nil {
+	if errors.Is(err, database.ErrNotFound) {
+		respondWithError(w, http.StatusNotFound, "Video not found", err)
+		return
+	} else if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
 		return
 	} else if videoMetadata.UserID != userID {

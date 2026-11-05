@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
+	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -60,7 +62,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	fileExtension := getExtension(mediaType)
 
 	videoMetadata, err := cfg.db.GetVideo(videoID)
-	if err != nil {
+	if errors.Is(err, database.ErrNotFound) {
+		respondWithError(w, http.StatusNotFound, "Video not found", err)
+		return
+	} else if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
 		return
 	} else if videoMetadata.UserID != userID {

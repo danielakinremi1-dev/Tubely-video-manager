@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
@@ -63,8 +64,11 @@ func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Requ
 	}
 
 	video, err := cfg.db.GetVideo(videoID)
-	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Couldn't get video", err)
+	if errors.Is(err, database.ErrNotFound) {
+		respondWithError(w, http.StatusNotFound, "Video not found", err)
+		return
+	} else if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get video", err)
 		return
 	}
 	if video.UserID != userID {
@@ -90,8 +94,11 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	videoMetadata, err := cfg.db.GetVideo(videoID)
-	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Couldn't get video", err)
+	if errors.Is(err, database.ErrNotFound) {
+		respondWithError(w, http.StatusNotFound, "Video not found", err)
+		return
+	} else if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get video", err)
 		return
 	}
 
