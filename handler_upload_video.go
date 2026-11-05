@@ -48,7 +48,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	f, _, err := r.FormFile("video")
 	if err != nil {
-		status, msg := uploadFormError(err, uploadLimit)
+		status, msg := uploadFormError(err, "video", uploadLimit)
 		respondWithError(w, status, msg, err)
 		return
 	}

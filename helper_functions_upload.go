@@ -57,11 +57,14 @@ func newObjectKey(prefix, ext string) string {
 
 // uploadFormError maps an error from parsing a multipart upload to a status
 // and message: 413 when the body hit its http.MaxBytesReader cap, 400 for a
-// malformed form or a missing file field.
-func uploadFormError(err error, limit int64) (int, string) {
+// missing file field or a malformed form.
+func uploadFormError(err error, field string, limit int64) (int, string) {
 	var tooBig *http.MaxBytesError
 	if errors.As(err, &tooBig) {
 		return http.StatusRequestEntityTooLarge, fmt.Sprintf("Upload is larger than %d MB", limit>>20)
+	}
+	if errors.Is(err, http.ErrMissingFile) {
+		return http.StatusBadRequest, fmt.Sprintf("Upload form has no %q file", field)
 	}
 	return http.StatusBadRequest, "Unable to parse upload form"
 }

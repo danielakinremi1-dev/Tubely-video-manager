@@ -46,14 +46,15 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	// The whole (capped) body fits in memory, so nothing spills to disk.
 	if err := r.ParseMultipartForm(maxThumbnailBytes); err != nil {
-		status, msg := uploadFormError(err, maxThumbnailBytes)
+		status, msg := uploadFormError(err, "thumbnail", maxThumbnailBytes)
 		respondWithError(w, status, msg, err)
 		return
 	}
 
 	reqFile, _, err := r.FormFile("thumbnail")
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Missing thumbnail file", err)
+		status, msg := uploadFormError(err, "thumbnail", maxThumbnailBytes)
+		respondWithError(w, status, msg, err)
 		return
 	}
 	defer reqFile.Close()
