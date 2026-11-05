@@ -64,7 +64,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tmp, err := os.CreateTemp("", "tubely-upload.mp4")
+	tmp, err := os.CreateTemp("", "tubely-upload-*.mp4")
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to create temp video upload file", err)
 		return
@@ -77,7 +77,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Unable to copy request data to temp file", err)
 		return
 	}
-	tmp.Seek(0, io.SeekStart)
 
 	tmpProcessed, err := processVideoForFastStart(r.Context(), tmp.Name())
 	if err != nil {
