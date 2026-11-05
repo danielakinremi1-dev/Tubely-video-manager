@@ -31,6 +31,18 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	videoMetadata, err := cfg.db.GetVideo(videoID)
+	if errors.Is(err, database.ErrNotFound) {
+		respondWithError(w, http.StatusNotFound, "Video not found", err)
+		return
+	} else if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
+		return
+	} else if videoMetadata.UserID != userID {
+		respondWithError(w, http.StatusForbidden, "You can't upload to this video", nil)
+		return
+	}
+
 	const maxMemory = 10 << 20
 	r.ParseMultipartForm(maxMemory)
 
@@ -53,18 +65,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	fileExtension := getExtension(mediaType)
-
-	videoMetadata, err := cfg.db.GetVideo(videoID)
-	if errors.Is(err, database.ErrNotFound) {
-		respondWithError(w, http.StatusNotFound, "Video not found", err)
-		return
-	} else if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
-		return
-	} else if videoMetadata.UserID != userID {
-		respondWithJSON(w, http.StatusUnauthorized, struct{}{})
-		return
-	}
 
 	thumbnailKey := newObjectKey("thumbnails/", fileExtension)
 

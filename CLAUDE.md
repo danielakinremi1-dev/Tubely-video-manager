@@ -42,7 +42,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 
 ## Conventions
 
-- Every protected handler follows the same steps: parse the path ID, call `auth.GetBearerToken`, call `auth.ValidateJWT`, load the record (`ErrNotFound` → 404), check ownership (→ 403). The upload handlers still return 401 for an ownership failure until Phase 1 fixes it.
+- Every protected handler follows the same steps: parse the path ID, call `auth.GetBearerToken`, call `auth.ValidateJWT`, load the record (`ErrNotFound` → 404), check ownership (→ 403).
 - Errors go through `respondWithError(w, status, msg, err)`. Don't write raw `http.Error` calls.
 - New config comes from env vars read in `main.go`, with a matching entry in `.env.example`. Optional vars need a sensible default. Don't make them `log.Fatal` when unset.
 - The module path is `github.com/danielakinremi1-dev/tubely`.

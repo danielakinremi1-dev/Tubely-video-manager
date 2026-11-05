@@ -31,6 +31,11 @@ func NewClient(pathToDB string) (Client, error) {
 
 }
 
+// Close releases the underlying database handle.
+func (c Client) Close() error {
+	return c.db.Close()
+}
+
 func (c *Client) autoMigrate() error {
 	userTable := `
 	CREATE TABLE IF NOT EXISTS users (

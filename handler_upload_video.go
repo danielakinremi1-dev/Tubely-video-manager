@@ -44,7 +44,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
 		return
 	} else if videoMetadata.UserID != userID {
-		respondWithJSON(w, http.StatusUnauthorized, struct{}{})
+		respondWithError(w, http.StatusForbidden, "You can't upload to this video", nil)
 		return
 	}
 
