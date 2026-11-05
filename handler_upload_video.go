@@ -11,7 +11,7 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
+	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/google/uuid"
 )
 
