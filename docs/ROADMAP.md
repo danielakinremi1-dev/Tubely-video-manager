@@ -70,7 +70,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] S3 transfer manager (`feature/s3/transfermanager`, the successor to the deprecated `feature/s3/manager`) for multipart uploads of large files
 
 **Thumbnail upload**
-- [ ] Check the `ParseMultipartForm` error and cap the body with `http.MaxBytesReader` (10 MB)
+- [x] Check the `ParseMultipartForm` error and cap the body with `http.MaxBytesReader` (10 MB)
 
 **Database**
 - [ ] Schema fixes: `videos.user_id` becomes `TEXT`, the `video_url TEXT TEXT` typo is fixed, and foreign keys get `ON DELETE CASCADE`

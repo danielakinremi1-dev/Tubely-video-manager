@@ -55,6 +55,17 @@ func newObjectKey(prefix, ext string) string {
 	return prefix + uuid.NewString() + ext
 }
 
+// uploadFormError maps an error from parsing a multipart upload to a status
+// and message: 413 when the body hit its http.MaxBytesReader cap, 400 for a
+// malformed form or a missing file field.
+func uploadFormError(err error, limit int64) (int, string) {
+	var tooBig *http.MaxBytesError
+	if errors.As(err, &tooBig) {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf("Upload is larger than %d MB", limit>>20)
+	}
+	return http.StatusBadRequest, "Unable to parse upload form"
+}
+
 // sniffMediaType returns a file's type as detected from its first 512 bytes
 // (the WHATWG MIME-sniffing algorithm behind http.DetectContentType) and
 // rewinds the file. Validation then depends on the bytes, not on the

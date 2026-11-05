@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,6 +139,36 @@ func TestUploadRejectsSpoofedContentType(t *testing.T) {
 			req.Header.Set("Content-Type", ctype)
 			req.Header.Set("Authorization", "Bearer "+token)
 			assertJSONError(t, serve(tc.pattern, tc.h, req), http.StatusUnsupportedMediaType)
+		})
+	}
+}
+
+func TestThumbnailUploadFormErrors(t *testing.T) {
+	cfg := newTestConfig(t)
+	owner, token := newTestUser(t, cfg, "owner@example.com")
+	video := newTestVideo(t, cfg, owner)
+	const pattern = "POST /api/thumbnail_upload/{videoID}"
+
+	tooBig, tooBigType := multipartBody(t, "thumbnail", "image/png",
+		append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 11<<20)...))
+	wrongField, wrongFieldType := multipartBody(t, "image", "image/png", []byte("\x89PNG\r\n\x1a\n"))
+
+	cases := []struct {
+		name        string
+		body        io.Reader
+		contentType string
+		want        int
+	}{
+		{"over 10 MB", tooBig, tooBigType, http.StatusRequestEntityTooLarge},
+		{"missing file field", wrongField, wrongFieldType, http.StatusBadRequest},
+		{"not multipart", strings.NewReader(`{"a":1}`), "application/json", http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/api/thumbnail_upload/"+video.ID.String(), tc.body)
+			req.Header.Set("Content-Type", tc.contentType)
+			req.Header.Set("Authorization", "Bearer "+token)
+			assertJSONError(t, serve(pattern, cfg.handlerUploadThumbnail, req), tc.want)
 		})
 	}
 }

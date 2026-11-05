@@ -48,7 +48,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	f, _, err := r.FormFile("video")
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
+		status, msg := uploadFormError(err, uploadLimit)
+		respondWithError(w, status, msg, err)
 		return
 	}
 	defer f.Close()

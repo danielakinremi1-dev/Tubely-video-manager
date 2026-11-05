@@ -10,6 +10,9 @@ import (
 )
 
 func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
+	const maxThumbnailBytes = 10 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxThumbnailBytes)
+
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -41,12 +44,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	const maxMemory = 10 << 20
-	r.ParseMultipartForm(maxMemory)
+	// The whole (capped) body fits in memory, so nothing spills to disk.
+	if err := r.ParseMultipartForm(maxThumbnailBytes); err != nil {
+		status, msg := uploadFormError(err, maxThumbnailBytes)
+		respondWithError(w, status, msg, err)
+		return
+	}
 
 	reqFile, _, err := r.FormFile("thumbnail")
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
+		respondWithError(w, http.StatusBadRequest, "Missing thumbnail file", err)
 		return
 	}
 	defer reqFile.Close()
