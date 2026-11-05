@@ -20,11 +20,10 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-// migrate brings the database up to the latest schema version.
-func migrate(ctx context.Context, db *sql.DB) error {
+func newMigrationProvider(db *sql.DB) (*goose.Provider, error) {
 	fsys, err := fs.Sub(migrationFiles, "migrations")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	provider, err := goose.NewProvider(goose.DialectSQLite3, db, fsys,
 		goose.WithGoMigrations(
@@ -32,7 +31,16 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		),
 	)
 	if err != nil {
-		return fmt.Errorf("init migrations: %w", err)
+		return nil, fmt.Errorf("init migrations: %w", err)
+	}
+	return provider, nil
+}
+
+// migrate brings the database up to the latest schema version.
+func migrate(ctx context.Context, db *sql.DB) error {
+	provider, err := newMigrationProvider(db)
+	if err != nil {
+		return err
 	}
 	if _, err := provider.Up(ctx); err != nil {
 		return fmt.Errorf("migrate: %w", err)

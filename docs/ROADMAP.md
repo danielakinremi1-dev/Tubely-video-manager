@@ -73,7 +73,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] Check the `ParseMultipartForm` error and cap the body with `http.MaxBytesReader` (10 MB)
 
 **Database**
-- [ ] Schema fixes: `videos.user_id` becomes `TEXT`, the `video_url TEXT TEXT` typo is fixed, and foreign keys get `ON DELETE CASCADE`
+- [x] Schema fixes: `videos.user_id` becomes `TEXT`, the `video_url TEXT TEXT` typo is fixed, and foreign keys get `ON DELETE CASCADE`
 - [ ] Turn on SQLite foreign-key enforcement (`_foreign_keys=on`)
 - [ ] `UpdateVideo` sets `updated_at` and stops passing pointer-to-pointer arguments
 - [x] Versioned migrations with goose. The baseline matches the current schema, including `video_key`.

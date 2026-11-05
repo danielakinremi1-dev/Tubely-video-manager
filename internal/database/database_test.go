@@ -110,13 +110,17 @@ func TestMigrateAdoptsPreGooseDatabases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			userID, legacyID, brokenID := uuid.New(), uuid.New(), uuid.New()
+			userID, legacyID, brokenID, orphanID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 			stmts := []string{schema,
 				`INSERT INTO users (id, password, email) VALUES ('` + userID.String() + `', 'hash', 'a@example.com')`,
 				`INSERT INTO videos (id, title, description, video_url, user_id) VALUES ('` + legacyID.String() +
 					`', 'legacy', '', 'https://dxxxx.cloudfront.net/portrait/abc.mp4', '` + userID.String() + `')`,
-				`INSERT INTO videos (id, title, description, video_url, user_id) VALUES ('` + brokenID.String() +
-					`', 'broken', '', 'not a url', '` + userID.String() + `')`,
+				// NULL description: allowed by the old schema, unscannable in Go.
+				`INSERT INTO videos (id, title, video_url, user_id) VALUES ('` + brokenID.String() +
+					`', 'broken', 'not a url', '` + userID.String() + `')`,
+				// Owner no longer exists.
+				`INSERT INTO videos (id, title, description, user_id) VALUES ('` + orphanID.String() +
+					`', 'orphan', '', '` + uuid.NewString() + `')`,
 			}
 			for _, stmt := range stmts {
 				if _, err := raw.Exec(stmt); err != nil {
@@ -148,7 +152,71 @@ func TestMigrateAdoptsPreGooseDatabases(t *testing.T) {
 			if got.VideoKey != nil {
 				t.Errorf("unparseable URL VideoKey = %q, want nil", *got.VideoKey)
 			}
+			if got.Description != "" {
+				t.Errorf("NULL description became %q, want empty", got.Description)
+			}
+			if _, err := c.GetVideo(orphanID); !errors.Is(err, ErrNotFound) {
+				t.Errorf("orphaned video: err = %v, want ErrNotFound", err)
+			}
 		})
+	}
+}
+
+func TestSchemaFixes(t *testing.T) {
+	c := newTestClient(t)
+
+	colType := func(table, column string) (string, bool) {
+		t.Helper()
+		var typ string
+		var notNull bool
+		err := c.db.QueryRow("SELECT type, \"notnull\" FROM pragma_table_info(?) WHERE name = ?", table, column).Scan(&typ, &notNull)
+		if err != nil {
+			t.Fatalf("%s.%s: %v", table, column, err)
+		}
+		return typ, notNull
+	}
+	for _, tc := range []struct {
+		table, column, typ string
+		notNull            bool
+	}{
+		{"videos", "user_id", "TEXT", true},
+		{"videos", "video_url", "TEXT", false},
+		{"videos", "description", "TEXT", true},
+	} {
+		if typ, notNull := colType(tc.table, tc.column); typ != tc.typ || notNull != tc.notNull {
+			t.Errorf("%s.%s = %s notnull=%v, want %s notnull=%v", tc.table, tc.column, typ, notNull, tc.typ, tc.notNull)
+		}
+	}
+	for _, table := range []string{"videos", "refresh_tokens"} {
+		var onDelete string
+		err := c.db.QueryRow("SELECT on_delete FROM pragma_foreign_key_list(?) WHERE \"table\" = 'users'", table).Scan(&onDelete)
+		if err != nil || onDelete != "CASCADE" {
+			t.Errorf("%s -> users: on_delete = %q (%v), want CASCADE", table, onDelete, err)
+		}
+	}
+}
+
+// Every down migration must undo its up migration cleanly.
+func TestMigrationsRollBackAndReapply(t *testing.T) {
+	c := newTestClient(t)
+	u := createTestUser(t, c)
+	v, err := c.CreateVideo(CreateVideoParams{Title: "keep me", UserID: u.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := newMigrationProvider(c.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	if _, err := p.DownTo(ctx, 1); err != nil {
+		t.Fatalf("DownTo(1): %v", err)
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if got, err := c.GetVideo(v.ID); err != nil || got.Title != "keep me" {
+		t.Errorf("after down/up: %+v, %v", got, err)
 	}
 }
 
