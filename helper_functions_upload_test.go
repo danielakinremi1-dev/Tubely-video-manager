@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewObjectKey(t *testing.T) {
@@ -69,7 +72,7 @@ func TestGetVideoAspectRatio(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getVideoAspectRatio(tt.file(t))
+			got, err := getVideoAspectRatio(context.Background(), tt.file(t))
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -77,5 +80,25 @@ func TestGetVideoAspectRatio(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunToolTimeoutAndStderr(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not on PATH")
+	}
+	_, err := runTool(context.Background(), 50*time.Millisecond, "sh", "-c", "sleep 5")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("slow command: err = %v, want DeadlineExceeded", err)
+	}
+
+	_, err = runTool(context.Background(), time.Second, "sh", "-c", "echo boom >&2; exit 3")
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("failing command: err = %v, want stderr in message", err)
+	}
+
+	out, err := runTool(context.Background(), time.Second, "sh", "-c", "echo ok")
+	if err != nil || strings.TrimSpace(string(out)) != "ok" {
+		t.Errorf("ok command: out = %q, err = %v", out, err)
 	}
 }

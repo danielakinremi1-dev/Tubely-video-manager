@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -10,7 +11,39 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+// Upper bounds for the external media tools. ffprobe only reads headers;
+// ffmpeg remuxes (-c copy, no re-encode), which is I/O-bound even for a 1 GB
+// upload. A hung process is killed instead of pinning the request forever.
+const (
+	ffprobeTimeout = 30 * time.Second
+	ffmpegTimeout  = 5 * time.Minute
+)
+
+// runTool runs an external command under a timeout derived from ctx, so a
+// cancelled request or a stuck process kills it. It returns stdout, and on
+// failure an error that includes the tool's stderr.
+func runTool(ctx context.Context, timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	// After a kill, stop waiting on output pipes that a leftover child
+	// process may still hold open.
+	cmd.WaitDelay = time.Second
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			err = fmt.Errorf("%w (%v)", ctxErr, err)
+		}
+		return nil, fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.Bytes(), nil
+}
 
 // newObjectKey returns a random, URL-safe object key such as
 // "thumbnails/<43 random chars>.png".
@@ -30,7 +63,7 @@ func getExtension(mediaType string) string {
 	return "." + extensions[1]
 }
 
-func getVideoAspectRatio(filePath string) (string, error) {
+func getVideoAspectRatio(ctx context.Context, filePath string) (string, error) {
 	type VideoData struct {
 		Streams []struct {
 			Width  int `json:"width"`
@@ -41,16 +74,13 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	videoInfo := VideoData{}
 
 	// Only look at the first video stream; an audio stream can come first.
-	cmd := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0",
+	out, err := runTool(ctx, ffprobeTimeout, "ffprobe", "-v", "error", "-select_streams", "v:0",
 		"-print_format", "json", "-show_streams", filePath)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("ffprobe: %w: %s", err, strings.TrimSpace(stderr.String()))
+	if err != nil {
+		return "", err
 	}
 
-	if err := json.Unmarshal(stdout.Bytes(), &videoInfo); err != nil {
+	if err := json.Unmarshal(out, &videoInfo); err != nil {
 		return "", fmt.Errorf("parse ffprobe output: %w", err)
 	}
 	if len(videoInfo.Streams) == 0 {
@@ -74,11 +104,11 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	return "other", nil
 }
 
-func processVideoForFastStart(filePath string) (string, error) {
+func processVideoForFastStart(ctx context.Context, filePath string) (string, error) {
 	newPath := filePath + ".processing"
 
-	cmd := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", newPath)
-	err := cmd.Run()
+	_, err := runTool(ctx, ffmpegTimeout, "ffmpeg", "-v", "error", "-i", filePath,
+		"-c", "copy", "-movflags", "faststart", "-f", "mp4", newPath)
 	if err != nil {
 		os.Remove(newPath) // ffmpeg may leave a partial output file
 		return "", err
