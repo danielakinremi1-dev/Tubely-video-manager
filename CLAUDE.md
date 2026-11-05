@@ -20,6 +20,7 @@ cp .env.example .env        # local defaults work as-is with the emulator
 make up                     # docker compose up -d (S3 emulator on :9090)
 go run .                    # serves http://localhost:$PORT/app/  (or: make dev)
 make check                  # go build ./... && go vet ./... && go test ./...
+make test-integration       # also run S3 tests against the emulator (starts it)
 make down                   # stop services; `docker compose down -v` wipes uploads
 ./samplesdownload.sh        # sample videos and images into samples/
 ```

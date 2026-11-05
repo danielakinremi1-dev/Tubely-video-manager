@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/google/uuid"
@@ -108,14 +107,9 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	fileKey := newObjectKey(prefix, getExtension(mediaType))
 
-	// A cancelled request (client gone) aborts the upload; S3 never stores a
-	// partial PutObject, so nothing is orphaned.
-	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
-		Bucket:      &cfg.s3Bucket,
-		Key:         &fileKey,
-		Body:        tmpProcessedFile,
-		ContentType: &mediaType,
-	})
+	// A cancelled request (client gone) aborts the upload, and neither a
+	// failed PutObject nor an aborted multipart upload leaves an object.
+	err = cfg.putObject(r.Context(), fileKey, mediaType, tmpProcessedFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload video data to server", err)
 		return

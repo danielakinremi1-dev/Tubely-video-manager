@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -32,6 +35,39 @@ func s3ClientOptions(endpoint string, pathStyle bool) func(*s3.Options) {
 		}
 		o.UsePathStyle = pathStyle
 	}
+}
+
+// abortTimeout bounds the cleanup the transfer manager runs after a failed
+// multipart upload. It gets a fresh context, so the abort still happens when
+// the failure was the request being cancelled.
+const abortTimeout = 30 * time.Second
+
+// newS3Uploader wraps the client in the S3 transfer manager. Bodies above
+// 16 MiB are sent as a multipart upload of 8 MiB parts in parallel, with
+// per-part retries. Smaller bodies are a single PutObject. A failed multipart
+// upload is aborted so S3 doesn't keep (and bill for) its uploaded parts.
+//
+// On real AWS every part carries a CRC32 checksum that S3 verifies. Custom
+// endpoints (emulators) get checksums only when required: S3Mock doesn't
+// echo per-part checksums back, so it rejects the completed upload.
+func newS3Uploader(client *s3.Client, customEndpoint bool) *transfermanager.Client {
+	return transfermanager.New(client, func(o *transfermanager.Options) {
+		o.FailTimeout = abortTimeout
+		if customEndpoint {
+			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		}
+	})
+}
+
+// putObject uploads body to the media bucket under key.
+func (cfg *apiConfig) putObject(ctx context.Context, key, contentType string, body io.Reader) error {
+	_, err := cfg.s3Uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
+		Bucket:      &cfg.s3Bucket,
+		Key:         &key,
+		Body:        body,
+		ContentType: &contentType,
+	})
+	return err
 }
 
 // deleteObject removes an object from the media bucket. It's used for

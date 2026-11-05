@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/danielakinremi1-dev/tubely/internal/database"
@@ -24,6 +25,7 @@ type apiConfig struct {
 	mediaBaseURL string
 	port         string
 	s3Client     *s3.Client
+	s3Uploader   *transfermanager.Client
 }
 
 func main() {
@@ -101,6 +103,7 @@ func main() {
 		s3Region:     s3Region,
 		mediaBaseURL: mediaBaseURL,
 		s3Client:     s3Client,
+		s3Uploader:   newS3Uploader(s3Client, s3Endpoint != ""),
 		port:         port,
 	}
 

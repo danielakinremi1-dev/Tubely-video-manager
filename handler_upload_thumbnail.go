@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/google/uuid"
@@ -65,13 +64,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	thumbnailKey := newObjectKey("thumbnails/", fileExtension)
 
-	// The multipart file is seekable, which S3 signing over plain http needs.
-	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
-		Bucket:      &cfg.s3Bucket,
-		Key:         &thumbnailKey,
-		Body:        reqFile,
-		ContentType: &mediaType,
-	})
+	err = cfg.putObject(r.Context(), thumbnailKey, mediaType, reqFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload thumbnail", err)
 		return

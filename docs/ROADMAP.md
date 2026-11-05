@@ -67,7 +67,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] Ownership mismatch returns 403 with a JSON error, not 401 with `{}`
 - [x] Fix the "Missing Content-Type for thumbnail" message in the video handler
 - [x] Sniff the real content type (`http.DetectContentType`) instead of trusting the client header
-- [ ] S3 upload manager (`feature/s3/manager`) for multipart uploads of large files
+- [x] S3 transfer manager (`feature/s3/transfermanager`, the successor to the deprecated `feature/s3/manager`) for multipart uploads of large files
 
 **Thumbnail upload**
 - [ ] Check the `ParseMultipartForm` error and cap the body with `http.MaxBytesReader` (10 MB)
