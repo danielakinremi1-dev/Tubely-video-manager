@@ -20,9 +20,15 @@ import (
 )
 
 func main() {
-	// .env is optional (containers set real env vars), but a malformed one
-	// is an error worth stopping for. Variables already set win.
-	envErr := godotenv.Load(".env")
+	// ENV_FILE picks the settings file: .env by default (optional, since
+	// containers set real env vars), or e.g. .env.aws for the AWS demo, which
+	// must then exist. Only that one file is read, so AWS settings can't mix
+	// with the emulator's. Variables already set in the environment win.
+	envFile, envFileChosen := os.LookupEnv("ENV_FILE")
+	if !envFileChosen {
+		envFile = ".env"
+	}
+	envErr := godotenv.Load(envFile)
 
 	// Human-readable logs in development; JSON (one object per line, easy to
 	// search and ship to a log service) everywhere else.
@@ -31,8 +37,8 @@ func main() {
 		logHandler = slog.NewTextHandler(os.Stderr, nil)
 	}
 	slog.SetDefault(slog.New(logHandler))
-	if envErr != nil && !errors.Is(envErr, fs.ErrNotExist) {
-		fatal("couldn't read .env", "error", envErr)
+	if envErr != nil && (envFileChosen || !errors.Is(envErr, fs.ErrNotExist)) {
+		fatal("couldn't read env file", "file", envFile, "error", envErr)
 	}
 
 	processor := media.FFmpeg{}
@@ -103,6 +109,8 @@ func main() {
 		Region:         s3Region,
 		Endpoint:       s3Endpoint,
 		ForcePathStyle: s3ForcePathStyle,
+		// Optional: assume this role for temporary credentials (the AWS demo).
+		RoleARN: os.Getenv("S3_ROLE_ARN"),
 	})
 	if err != nil {
 		fatal("couldn't set up S3 storage", "error", err)

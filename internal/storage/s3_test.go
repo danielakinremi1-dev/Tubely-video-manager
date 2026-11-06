@@ -1,7 +1,11 @@
 package storage
 
 import (
+	"context"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -32,5 +36,31 @@ func TestS3ClientOptions(t *testing.T) {
 				t.Errorf("UsePathStyle = %v, want %v", o.UsePathStyle, tt.pathStyle)
 			}
 		})
+	}
+}
+
+// With RoleARN set, S3 calls use the assumed role's credentials. Building the
+// store makes no AWS calls; the role is assumed on first use.
+func TestNewS3AssumesRole(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "base")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "base")
+	t.Setenv("AWS_CONFIG_FILE", t.TempDir()+"/none")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", t.TempDir()+"/none")
+
+	for _, tc := range []struct {
+		role string
+		want bool
+	}{
+		{"", false},
+		{"arn:aws:iam::123456789012:role/tubely-demo-app", true},
+	} {
+		s, err := NewS3(context.Background(), S3Config{Bucket: "b", Region: "us-east-1", RoleARN: tc.role})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := aws.IsCredentialsProvider(s.client.Options().Credentials, (*stscreds.AssumeRoleProvider)(nil))
+		if got != tc.want {
+			t.Errorf("RoleARN %q: assume-role provider = %v, want %v", tc.role, got, tc.want)
+		}
 	}
 }
