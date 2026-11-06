@@ -19,3 +19,13 @@ output "media_base_url" {
   description = "Public base URL for object keys (MEDIA_BASE_URL)."
   value       = "https://${aws_cloudfront_distribution.media.domain_name}"
 }
+
+output "app_role_arn" {
+  description = "Role the app assumes for temporary credentials."
+  value       = aws_iam_role.app.arn
+}
+
+output "deployer_arn" {
+  description = "The identity that applied this stack and may assume the app role."
+  value       = data.aws_iam_session_context.current.issuer_arn
+}
