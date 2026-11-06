@@ -44,7 +44,7 @@ An upload works like this:
 
 | Piece | Locally (today) | On AWS |
 |---|---|---|
-| API and web UI | `go run .` on your machine | Not deployed yet |
+| API and web UI | `go run ./cmd/tubely`, or the Docker image (`make up-app`) | Not deployed yet |
 | Database | SQLite file (`DB_PATH`) | Not deployed yet |
 | Media storage | [S3Mock](https://github.com/adobe/S3Mock) in Docker on `:9090` | S3 bucket behind CloudFront, managed by Terraform in [Phase 3](docs/ROADMAP.md) |
 
@@ -81,11 +81,17 @@ To get sample videos and images to upload:
 ./samplesdownload.sh     # downloads them into samples/
 ```
 
+**Or run everything in Docker**, with no Go or ffmpeg on your machine:
+
+```bash
+make up-app              # builds the image and starts S3 + the API on :8091
+```
+
 Other commands:
 
 ```bash
-make down                # stop the emulator; uploads are kept
-docker compose down -v   # stop it and delete all uploaded media
+make down                # stop the containers; uploads are kept
+docker compose down -v   # stop them and delete all uploaded media
 ```
 
 ## Configuration
@@ -111,15 +117,21 @@ All settings are environment variables, read from `.env` if it exists. The defau
 
 Protected routes need `Authorization: Bearer <access token>`. Errors look like `{"error": "..."}`.
 
+**Access model:**
+- Videos are private. Every video route requires an access token, and a video can only be read, changed or deleted by its owner. Anyone else gets `403`.
+- The media files themselves are served from unguessable URLs (`<prefix>/<uuid>.mp4`). Anyone you give that URL to can play the file.
+- Truly private media needs signed URLs, which are planned (see the roadmap's Later section).
+
 | Method and path | Auth | Description |
 |---|---|---|
+| `GET /api/healthz` | none | `{"status":"ok"}` when the database is reachable, else `503` |
 | `POST /api/users` | none | Sign up with `{"email", "password"}` → `201` |
 | `POST /api/login` | none | Returns the user plus `token` (access) and `refresh_token` |
 | `POST /api/refresh` | refresh token | Returns a new access token |
 | `POST /api/revoke` | refresh token | Revokes the refresh token → `204` |
 | `POST /api/videos` | access token | Creates a draft from `{"title", "description"}` → `201`. Titles are required and at most 100 characters. |
 | `GET /api/videos` | access token | Lists your videos, newest first |
-| `GET /api/videos/{videoID}` | none | Returns one video |
+| `GET /api/videos/{videoID}` | owner | Returns one of your videos |
 | `DELETE /api/videos/{videoID}` | owner | Deletes the video and its stored media → `204` |
 | `POST /api/video_upload/{videoID}` | owner | Multipart field `video`: an MP4 up to 1 GB |
 | `POST /api/thumbnail_upload/{videoID}` | owner | Multipart field `thumbnail`: a PNG or JPEG up to 10 MB |
@@ -128,36 +140,51 @@ Protected routes need `Authorization: Bearer <access token>`. Errors look like `
 ## Testing
 
 ```bash
-make check               # go build, go vet and go test (no network needed)
+make check               # go build, go vet and go test (no network, no Docker)
+make lint                # golangci-lint (uses Docker if it isn't installed)
 make test-integration    # also runs the S3 tests against the emulator (starts it)
+make up-app && make smoke  # end-to-end check against the running containers
 ```
 
-The tests cover:
-- the auth helpers;
+The unit and handler tests cover:
+- the auth helpers, including bearer-header parsing and HS256-only JWTs;
 - database queries and migrations, including adopting older databases and a rollback round trip;
-- upload validation and error codes, through `httptest`;
-- ffprobe classification using generated media;
-- single-part, multipart and cancelled uploads against S3Mock.
+- the whole upload path through the real router, using an in-memory store and a fake media processor. That includes every failure mode, and checks that each one leaves no objects, no key change and no temp files;
+- middleware (request IDs, access logs, panic recovery), server timeouts and graceful shutdown;
+- ffprobe and fast-start against small sample files in `internal/media/testdata`.
+
+The S3 integration tests run single-part, multipart and cancelled uploads against S3Mock. `scripts/smoke.sh` drives a running server over HTTP through:
+- every error code;
+- a 40 MB multipart upload and a client disconnect;
+- playback, range requests and delete.
+
+It then audits the bucket and the server's temp directory for leftovers.
 
 ## Project layout
 
 ```
-main.go                   config from env, wiring, routes
-handler_*.go              HTTP handlers, one file per resource
-helper_functions_upload.go  ffmpeg/ffprobe, type sniffing, object keys
-s3_client.go              S3 client, transfer manager, object cleanup
-media_url.go              object key → public URL
-json.go                   JSON responses and request decoding
-internal/auth             JWTs, refresh tokens, password hashing
-internal/database         hand-written SQL and goose migrations
+cmd/tubely/               main: config from env, wiring, server start
+internal/api/             HTTP layer: routes, handlers, upload validation, JSON helpers
+internal/storage/         Store interface: S3 (multipart) and in-memory
+internal/media/           Processor interface: ffprobe/ffmpeg and a test fake
+internal/database/        hand-written SQL and goose migrations
+internal/auth/            JWTs, refresh tokens, password hashing
 app/                      web UI (vanilla JS, no build step)
 docs/ROADMAP.md           phased plan and progress
 ```
 
+The API layer depends only on the `storage.Store` and `media.Processor` interfaces. `cmd/tubely` plugs in S3 and FFmpeg; tests plug in an in-memory store and a fake processor.
+
 ## Status
 
-Phases 0 to 1 of the [roadmap](docs/ROADMAP.md) are done: crash fixes, local S3-compatible storage, and a correct upload pipeline. The next phases cover:
-- **Phase 2:** package structure, interfaces and operations (timeouts, graceful shutdown, structured logs, Docker).
+Phases 0 to 2 of the [roadmap](docs/ROADMAP.md) are done:
+- crash fixes;
+- local S3-compatible storage;
+- a correct upload pipeline;
+- a layered structure with tested interfaces;
+- operational basics (timeouts, graceful shutdown, structured logs, a health check, Docker).
+
+The next phases:
 - **Phase 3:** Terraform for AWS with budget guardrails.
 - **Phase 4:** CI.
 - **Phase 5:** documentation.

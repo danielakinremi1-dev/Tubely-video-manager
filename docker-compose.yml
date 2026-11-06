@@ -20,7 +20,40 @@ services:
     volumes:
       - s3data:/s3mockroot
 
+  # The API itself, in a container: `docker compose --profile app up -d --build`
+  # (or `make up-app`). Without the profile, `docker compose up` starts only
+  # S3, for running the server with `go run ./cmd/tubely`.
+  app:
+    profiles: ["app"]
+    build: .
+    image: tubely:dev
+    ports:
+      - "8091:8091"
+    depends_on:
+      - s3
+    # Docker sends SIGTERM, then SIGKILL after this. Tubely drains for up to
+    # 20s and then aborts what's left (5s), so give it 30s, not the default 10s.
+    stop_grace_period: 30s
+    environment:
+      PLATFORM: dev
+      # A local-only default; set JWT_SECRET in your shell to override.
+      JWT_SECRET: ${JWT_SECRET:-local-compose-secret-not-for-production}
+      S3_BUCKET: tubely-local
+      S3_REGION: us-east-1
+      # The app reaches S3 by its compose service name...
+      S3_ENDPOINT: http://s3:9090
+      S3_FORCE_PATH_STYLE: "true"
+      # ...but the browser plays media from the host, so public URLs use the
+      # published port on localhost.
+      MEDIA_BASE_URL: http://localhost:9090/tubely-local
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    volumes:
+      - appdata:/data
+
 volumes:
   # Uploaded objects survive `docker compose down`; `docker compose down -v`
   # wipes them.
   s3data:
+  # The containerized app's SQLite database.
+  appdata:

@@ -1,14 +1,15 @@
-package main
+package api
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,38 +17,48 @@ import (
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
+	"github.com/danielakinremi1-dev/tubely/internal/media"
+	"github.com/danielakinremi1-dev/tubely/internal/storage"
 	"github.com/google/uuid"
 )
 
-// newTestConfig returns an apiConfig backed by a throwaway SQLite file. It has
-// no S3 client, so it only suits tests that fail before storage is touched.
-func newTestConfig(t *testing.T) *apiConfig {
+// newTestServer returns a Server backed by a throwaway SQLite file and an
+// in-memory media store.
+func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	db, err := database.NewClient(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return &apiConfig{db: db, jwtSecret: "test-secret", mediaBaseURL: "http://media.test"}
+	return NewServer(Config{
+		DB:           db,
+		Store:        storage.NewMemory(),
+		Processor:    &media.Fake{Info: media.Info{Width: 1280, Height: 720}},
+		JWTSecret:    "test-secret",
+		MediaBaseURL: "http://media.test",
+		// Keep test output quiet; tests that check logs swap in a buffer.
+		Logger: slog.New(slog.DiscardHandler),
+	})
 }
 
 // newTestUser creates a user and returns its ID and a valid access token.
-func newTestUser(t *testing.T, cfg *apiConfig, email string) (uuid.UUID, string) {
+func newTestUser(t *testing.T, srv *Server, email string) (uuid.UUID, string) {
 	t.Helper()
-	u, err := cfg.db.CreateUser(database.CreateUserParams{Email: email, Password: "hash"})
+	u, err := srv.db.CreateUser(database.CreateUserParams{Email: email, Password: "hash"})
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	token, err := auth.MakeJWT(u.ID, cfg.jwtSecret, time.Hour)
+	token, err := auth.MakeJWT(u.ID, srv.jwtSecret, time.Hour)
 	if err != nil {
 		t.Fatalf("MakeJWT: %v", err)
 	}
 	return u.ID, token
 }
 
-func newTestVideo(t *testing.T, cfg *apiConfig, owner uuid.UUID) database.Video {
+func newTestVideo(t *testing.T, srv *Server, owner uuid.UUID) database.Video {
 	t.Helper()
-	v, err := cfg.db.CreateVideo(database.CreateVideoParams{Title: "t", UserID: owner})
+	v, err := srv.db.CreateVideo(database.CreateVideoParams{Title: "t", UserID: owner})
 	if err != nil {
 		t.Fatalf("CreateVideo: %v", err)
 	}
@@ -71,12 +82,11 @@ func multipartBody(t *testing.T, field, contentType string, data []byte) (*bytes
 	return &buf, mw.FormDataContentType()
 }
 
-// serve routes one request through the real mux pattern so PathValue works.
-func serve(pattern string, h http.HandlerFunc, req *http.Request) *httptest.ResponseRecorder {
-	mux := http.NewServeMux()
-	mux.HandleFunc(pattern, h)
+// serve sends one request through the server's real router, including its
+// middleware (requireAuth), and records the response.
+func serve(srv *Server, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	srv.Handler().ServeHTTP(rec, req)
 	return rec
 }
 
@@ -95,17 +105,16 @@ func assertJSONError(t *testing.T, rec *httptest.ResponseRecorder, wantStatus in
 }
 
 func TestUploadOwnershipIsForbidden(t *testing.T) {
-	cfg := newTestConfig(t)
-	owner, _ := newTestUser(t, cfg, "owner@example.com")
-	_, otherToken := newTestUser(t, cfg, "other@example.com")
-	video := newTestVideo(t, cfg, owner)
+	srv := newTestServer(t)
+	owner, _ := newTestUser(t, srv, "owner@example.com")
+	_, otherToken := newTestUser(t, srv, "other@example.com")
+	video := newTestVideo(t, srv, owner)
 
 	cases := []struct {
-		name, pattern, path, field, ctype string
-		h                                 http.HandlerFunc
+		name, path, field, ctype string
 	}{
-		{"video", "POST /api/video_upload/{videoID}", "/api/video_upload/", "video", "video/mp4", cfg.handlerUploadVideo},
-		{"thumbnail", "POST /api/thumbnail_upload/{videoID}", "/api/thumbnail_upload/", "thumbnail", "image/png", cfg.handlerUploadThumbnail},
+		{"video", "/api/video_upload/", "video", "video/mp4"},
+		{"thumbnail", "/api/thumbnail_upload/", "thumbnail", "image/png"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -113,25 +122,24 @@ func TestUploadOwnershipIsForbidden(t *testing.T) {
 			req := httptest.NewRequest("POST", tc.path+video.ID.String(), body)
 			req.Header.Set("Content-Type", ctype)
 			req.Header.Set("Authorization", "Bearer "+otherToken)
-			assertJSONError(t, serve(tc.pattern, tc.h, req), http.StatusForbidden)
+			assertJSONError(t, serve(srv, req), http.StatusForbidden)
 		})
 	}
 }
 
 func TestUploadRejectsSpoofedContentType(t *testing.T) {
-	cfg := newTestConfig(t)
-	owner, token := newTestUser(t, cfg, "owner@example.com")
-	video := newTestVideo(t, cfg, owner)
+	srv := newTestServer(t)
+	owner, token := newTestUser(t, srv, "owner@example.com")
+	video := newTestVideo(t, srv, owner)
 
 	cases := []struct {
-		name, pattern, path, field, claimed string
-		data                                []byte
-		h                                   http.HandlerFunc
+		name, path, field, claimed string
+		data                       []byte
 	}{
-		{"pdf claiming mp4", "POST /api/video_upload/{videoID}", "/api/video_upload/", "video", "video/mp4",
-			[]byte("%PDF-1.4\n%fake"), cfg.handlerUploadVideo},
-		{"gif claiming png", "POST /api/thumbnail_upload/{videoID}", "/api/thumbnail_upload/", "thumbnail", "image/png",
-			[]byte("GIF89a\x01\x00\x01\x00"), cfg.handlerUploadThumbnail},
+		{"pdf claiming mp4", "/api/video_upload/", "video", "video/mp4",
+			[]byte("%PDF-1.4\n%fake")},
+		{"gif claiming png", "/api/thumbnail_upload/", "thumbnail", "image/png",
+			[]byte("GIF89a\x01\x00\x01\x00")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -139,16 +147,15 @@ func TestUploadRejectsSpoofedContentType(t *testing.T) {
 			req := httptest.NewRequest("POST", tc.path+video.ID.String(), body)
 			req.Header.Set("Content-Type", ctype)
 			req.Header.Set("Authorization", "Bearer "+token)
-			assertJSONError(t, serve(tc.pattern, tc.h, req), http.StatusUnsupportedMediaType)
+			assertJSONError(t, serve(srv, req), http.StatusUnsupportedMediaType)
 		})
 	}
 }
 
 func TestThumbnailUploadFormErrors(t *testing.T) {
-	cfg := newTestConfig(t)
-	owner, token := newTestUser(t, cfg, "owner@example.com")
-	video := newTestVideo(t, cfg, owner)
-	const pattern = "POST /api/thumbnail_upload/{videoID}"
+	srv := newTestServer(t)
+	owner, token := newTestUser(t, srv, "owner@example.com")
+	video := newTestVideo(t, srv, owner)
 
 	tooBig, tooBigType := multipartBody(t, "thumbnail", "image/png",
 		append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 11<<20)...))
@@ -169,22 +176,21 @@ func TestThumbnailUploadFormErrors(t *testing.T) {
 			req := httptest.NewRequest("POST", "/api/thumbnail_upload/"+video.ID.String(), tc.body)
 			req.Header.Set("Content-Type", tc.contentType)
 			req.Header.Set("Authorization", "Bearer "+token)
-			assertJSONError(t, serve(pattern, cfg.handlerUploadThumbnail, req), tc.want)
+			assertJSONError(t, serve(srv, req), tc.want)
 		})
 	}
 }
 
 func TestJSONBodyErrors(t *testing.T) {
-	cfg := newTestConfig(t)
-	_, token := newTestUser(t, cfg, "owner@example.com")
+	srv := newTestServer(t)
+	_, token := newTestUser(t, srv, "owner@example.com")
 
 	endpoints := []struct {
-		name, pattern, path string
-		h                   http.HandlerFunc
+		name, path string
 	}{
-		{"create user", "POST /api/users", "/api/users", cfg.handlerUsersCreate},
-		{"login", "POST /api/login", "/api/login", cfg.handlerLogin},
-		{"create video", "POST /api/videos", "/api/videos", cfg.handlerVideoMetaCreate},
+		{"create user", "/api/users"},
+		{"login", "/api/login"},
+		{"create video", "/api/videos"},
 	}
 	bodies := []struct {
 		name string
@@ -202,15 +208,15 @@ func TestJSONBodyErrors(t *testing.T) {
 				req := httptest.NewRequest("POST", ep.path, strings.NewReader(b.body))
 				req.Header.Set("Content-Type", "application/json")
 				req.Header.Set("Authorization", "Bearer "+token)
-				assertJSONError(t, serve(ep.pattern, ep.h, req), b.want)
+				assertJSONError(t, serve(srv, req), b.want)
 			})
 		}
 	}
 }
 
 func TestCreateVideoValidation(t *testing.T) {
-	cfg := newTestConfig(t)
-	_, token := newTestUser(t, cfg, "owner@example.com")
+	srv := newTestServer(t)
+	_, token := newTestUser(t, srv, "owner@example.com")
 
 	cases := []struct {
 		name, title, description string
@@ -230,7 +236,7 @@ func TestCreateVideoValidation(t *testing.T) {
 			body, _ := json.Marshal(map[string]string{"title": tc.title, "description": tc.description})
 			req := httptest.NewRequest("POST", "/api/videos", bytes.NewReader(body))
 			req.Header.Set("Authorization", "Bearer "+token)
-			rec := serve("POST /api/videos", cfg.handlerVideoMetaCreate, req)
+			rec := serve(srv, req)
 			if tc.want != http.StatusCreated {
 				assertJSONError(t, rec, tc.want)
 				return
@@ -250,18 +256,91 @@ func TestCreateVideoValidation(t *testing.T) {
 }
 
 // A file that sniffs as MP4 but isn't playable is the client's problem.
-func TestVideoUploadRejectsCorruptMP4(t *testing.T) {
-	if _, err := exec.LookPath("ffprobe"); err != nil {
-		t.Skip("ffprobe not on PATH")
-	}
-	cfg := newTestConfig(t)
-	owner, token := newTestUser(t, cfg, "owner@example.com")
-	video := newTestVideo(t, cfg, owner)
+func TestVideoUploadRejectsUnplayableVideo(t *testing.T) {
+	srv := newTestServer(t)
+	srv.processor = &media.Fake{ProbeErr: fmt.Errorf("%w: moov atom not found", media.ErrInvalidMedia)}
+	owner, token := newTestUser(t, srv, "owner@example.com")
+	video := newTestVideo(t, srv, owner)
 
-	corrupt := append([]byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"), bytes.Repeat([]byte{0xAB}, 4096)...)
-	body, ctype := multipartBody(t, "video", "video/mp4", corrupt)
+	mp4 := []byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
+	body, ctype := multipartBody(t, "video", "video/mp4", mp4)
 	req := httptest.NewRequest("POST", "/api/video_upload/"+video.ID.String(), body)
 	req.Header.Set("Content-Type", ctype)
 	req.Header.Set("Authorization", "Bearer "+token)
-	assertJSONError(t, serve("POST /api/video_upload/{videoID}", cfg.handlerUploadVideo, req), http.StatusUnprocessableEntity)
+	assertJSONError(t, serve(srv, req), http.StatusUnprocessableEntity)
+}
+
+func TestProtectedRoutesRequireToken(t *testing.T) {
+	srv := newTestServer(t)
+	id := uuid.NewString()
+	routes := []struct{ method, path string }{
+		{"POST", "/api/videos"},
+		{"GET", "/api/videos"},
+		{"GET", "/api/videos/" + id},
+		{"DELETE", "/api/videos/" + id},
+		{"POST", "/api/video_upload/" + id},
+		{"POST", "/api/thumbnail_upload/" + id},
+	}
+	for _, rt := range routes {
+		for _, header := range []string{"", "Bearer not-a-jwt"} {
+			t.Run(rt.method+" "+rt.path+" "+header, func(t *testing.T) {
+				req := httptest.NewRequest(rt.method, rt.path, nil)
+				if header != "" {
+					req.Header.Set("Authorization", header)
+				}
+				assertJSONError(t, serve(srv, req), http.StatusUnauthorized)
+			})
+		}
+	}
+}
+
+// Videos are private: only the owner can read or delete one.
+func TestVideoAccessControl(t *testing.T) {
+	srv := newTestServer(t)
+	owner, ownerToken := newTestUser(t, srv, "owner@example.com")
+	_, otherToken := newTestUser(t, srv, "other@example.com")
+
+	cases := []struct {
+		name, token, id string
+		want            int
+	}{
+		{"owner", ownerToken, "", http.StatusOK},
+		{"other user", otherToken, "", http.StatusForbidden},
+		{"unknown video", ownerToken, uuid.NewString(), http.StatusNotFound},
+		{"malformed id", ownerToken, "not-a-uuid", http.StatusBadRequest},
+	}
+	for _, method := range []string{"GET", "DELETE"} {
+		for _, tc := range cases {
+			t.Run(method+" "+tc.name, func(t *testing.T) {
+				id := tc.id
+				if id == "" {
+					id = newTestVideo(t, srv, owner).ID.String()
+				}
+				req := httptest.NewRequest(method, "/api/videos/"+id, nil)
+				req.Header.Set("Authorization", "Bearer "+tc.token)
+				rec := serve(srv, req)
+
+				want := tc.want
+				if method == "DELETE" && want == http.StatusOK {
+					want = http.StatusNoContent
+				}
+				if want >= 400 {
+					assertJSONError(t, rec, want)
+				} else if rec.Code != want {
+					t.Fatalf("status = %d, want %d (body %s)", rec.Code, want, rec.Body)
+				}
+			})
+		}
+	}
+}
+
+func TestHealthz(t *testing.T) {
+	srv := newTestServer(t)
+	rec := serve(srv, httptest.NewRequest("GET", "/api/healthz", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok"`) {
+		t.Errorf("healthy: %d %s", rec.Code, rec.Body)
+	}
+
+	srv.db.Close()
+	assertJSONError(t, serve(srv, httptest.NewRequest("GET", "/api/healthz", nil)), http.StatusServiceUnavailable)
 }

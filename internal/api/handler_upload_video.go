@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"errors"
@@ -6,46 +6,32 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
-	"github.com/google/uuid"
+	"github.com/danielakinremi1-dev/tubely/internal/media"
 )
 
-func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
+// videoFormMemory is how much of a video upload form is held in memory
+// before the rest spills to a temp file. A variable so tests can force the
+// spill with a small body.
+var videoFormMemory int64 = 32 << 20
+
+func (s *Server) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	const uploadLimit = 1 << 30
 	r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
 
-	videoIDString := r.PathValue("videoID")
-	videoID, err := uuid.Parse(videoIDString)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid ID", err)
+	videoMetadata, ok := s.loadOwnedVideo(w, r)
+	if !ok {
 		return
 	}
+	extendDeadlines(w, videoUploadTimeout)
 
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
+	defer removeFormFiles(r)
+	// Parts beyond videoFormMemory spill to a temp file.
+	if err := r.ParseMultipartForm(videoFormMemory); err != nil {
+		status, msg := uploadFormError(err, "video", uploadLimit)
+		respondWithError(w, status, msg, err)
 		return
 	}
-
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
-		return
-	}
-
-	videoMetadata, err := cfg.db.GetVideo(videoID)
-	if errors.Is(err, database.ErrNotFound) {
-		respondWithError(w, http.StatusNotFound, "Video not found", err)
-		return
-	} else if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
-		return
-	} else if videoMetadata.UserID != userID {
-		respondWithError(w, http.StatusForbidden, "You can't upload to this video", nil)
-		return
-	}
-
 	f, _, err := r.FormFile("video")
 	if err != nil {
 		status, msg := uploadFormError(err, "video", uploadLimit)
@@ -80,9 +66,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// Probe first: it's cheap, and it rejects files that aren't playable
 	// video before the remux spends time on them.
-	prefix := "other/"
-	aspectRatio, err := getVideoAspectRatio(r.Context(), tmp.Name())
-	if errors.Is(err, errInvalidMedia) {
+	info, err := s.processor.Probe(r.Context(), tmp.Name())
+	if errors.Is(err, media.ErrInvalidMedia) {
 		respondWithError(w, http.StatusUnprocessableEntity, "File is not a playable video", err)
 		return
 	} else if err != nil {
@@ -90,13 +75,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if aspectRatio == "16:9" {
-		prefix = "landscape/"
-	} else if aspectRatio == "9:16" {
-		prefix = "portrait/"
-	}
-
-	tmpProcessed, err := processVideoForFastStart(r.Context(), tmp.Name())
+	tmpProcessed, err := s.processor.FastStart(r.Context(), tmp.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to process video for fast start encoding", err)
 		return
@@ -110,11 +89,11 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	defer tmpProcessedFile.Close()
 
-	fileKey := newObjectKey(prefix, getExtension(mediaType))
+	fileKey := newObjectKey(keyPrefix(info.AspectRatio()), getExtension(mediaType))
 
 	// A cancelled request (client gone) aborts the upload, and neither a
 	// failed PutObject nor an aborted multipart upload leaves an object.
-	err = cfg.putObject(r.Context(), fileKey, mediaType, tmpProcessedFile)
+	err = s.store.Put(r.Context(), fileKey, mediaType, tmpProcessedFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload video data to server", err)
 		return
@@ -123,9 +102,9 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	oldKey := videoMetadata.VideoKey
 	videoMetadata.VideoKey = &fileKey
 
-	updated, err := cfg.db.UpdateVideo(videoMetadata)
+	updated, err := s.db.UpdateVideo(videoMetadata)
 	if err != nil {
-		cfg.deleteObject(r.Context(), &fileKey) // don't orphan the new upload
+		s.deleteObject(r.Context(), &fileKey) // don't orphan the new upload
 		if errors.Is(err, database.ErrNotFound) {
 			respondWithError(w, http.StatusNotFound, "Video was deleted during upload", err)
 			return
@@ -133,7 +112,19 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Unable to update database video data", err)
 		return
 	}
-	cfg.replaceObject(r.Context(), oldKey, fileKey)
+	s.replaceObject(r.Context(), oldKey, fileKey)
 
-	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(updated))
+	respondWithJSON(w, http.StatusOK, s.withMediaURLs(updated))
+}
+
+// keyPrefix files videos under their shape: landscape/, portrait/ or other/.
+func keyPrefix(aspectRatio string) string {
+	switch aspectRatio {
+	case media.Landscape:
+		return "landscape/"
+	case media.Portrait:
+		return "portrait/"
+	default:
+		return "other/"
+	}
 }

@@ -6,7 +6,7 @@ Tubely is being developed in phases from a single-binary course project into a p
 
 ## Architecture
 
-**Today (after Phase 1):** one Go process. It handles auth, validates uploads by their bytes, runs ffprobe and ffmpeg in the request path under timeouts, and sends videos and thumbnails to an S3-compatible bucket (the local emulator, or AWS), using multipart uploads for large files. SQLite stores object keys, not URLs, and its schema is versioned with goose. Handlers still call S3 and ffmpeg directly; Phase 2 puts them behind interfaces.
+**Today (after Phase 2):** one Go process, `cmd/tubely`, which wires concrete implementations into `internal/api`. The API layer handles auth (`requireAuth` middleware; videos are owner-only), validates uploads by their bytes, and reaches media storage and processing only through the `storage.Store` and `media.Processor` interfaces: S3 (multipart) and ffprobe/ffmpeg in production, an in-memory store and a fake in tests. SQLite stores object keys, not URLs, with a goose-versioned schema. The server has timeouts, graceful shutdown, structured request logs and a health check, and ships as a Docker image. ffmpeg still runs in the request path; moving it to a background worker is under Later.
 
 **Target:**
 
@@ -84,28 +84,26 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 **Done when:** every upload failure mode returns the correct 4xx/5xx with a JSON error, and no temp files or orphaned objects are left behind.
 
-## Phase 2: Structure and operability
-
-**Start here** when resuming. Boxes are in commit order: the interfaces come before the package split, so each diff stays small.
+## Phase 2: Structure and operability ✅
 
 **Structure**
-- [ ] `storage` interface (`Put`, `Delete`) with the S3 implementation and an in-memory fake
-- [ ] `media` interface (`Probe`, `FastStart`) with the ffmpeg implementation, a pure aspect-ratio classifier and a fake
-- [ ] Split into `cmd/tubely`, `internal/api`, `internal/storage` and `internal/media`, next to the existing `internal/auth` and `internal/database`
-- [ ] `requireAuth` middleware that puts the user ID into the request context (it replaces five copies of the JWT parsing), and pin the JWT signing method to HS256
+- [x] `storage` interface (`Put`, `Delete`) with the S3 implementation and an in-memory fake
+- [x] `media` interface (`Probe`, `FastStart`) with the ffmpeg implementation, a pure aspect-ratio classifier and a fake
+- [x] Split into `cmd/tubely`, `internal/api`, `internal/storage` and `internal/media`, next to the existing `internal/auth` and `internal/database`
+- [x] `requireAuth` middleware that puts the user ID into the request context (it replaces five copies of the JWT parsing), make `GET /api/videos/{id}` owner-only, and pin the JWT signing method to HS256
 
 **Operations**
-- [ ] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
-- [ ] Graceful shutdown on SIGINT/SIGTERM
-- [ ] `log/slog` structured logging, request-ID middleware and panic recovery
-- [ ] Startup check that ffmpeg/ffprobe are on PATH, plus `GET /api/healthz`
+- [x] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
+- [x] Graceful shutdown on SIGINT/SIGTERM
+- [x] `log/slog` structured logging, request-ID middleware and panic recovery
+- [x] Startup check that ffmpeg/ffprobe are on PATH, plus `GET /api/healthz`
 
 **Tests and packaging**
-- [ ] Unit tests: `getExtension`, the aspect-ratio classifier and the auth helpers
-- [ ] Handler tests with `httptest` and the fake storage/media implementations
-- [ ] Small sample MP4s in `testdata/` for the ffprobe tests
-- [ ] Multi-stage `Dockerfile` with ffmpeg, an `app` service in compose, and `scripts/smoke.sh` (the end-to-end upload check)
-- [ ] `make lint` (golangci-lint)
+- [x] Unit tests: `getExtension`, the aspect-ratio classifier and the auth helpers
+- [x] Handler tests with `httptest` and the fake storage/media implementations
+- [x] Small sample MP4s in `testdata/` for the ffprobe tests
+- [x] Multi-stage `Dockerfile` with ffmpeg, an `app` service in compose, and `scripts/smoke.sh` (the end-to-end upload check)
+- [x] `make lint` (golangci-lint)
 
 **Done when:** handlers have no direct AWS or ffmpeg calls, and `go test ./...` covers the main upload path without network access.
 
@@ -126,6 +124,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [ ] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
 - [ ] `terraform fmt -check` and `terraform validate`. No `apply` and no AWS credentials in CI.
 - [ ] CI badge in the README
+- [ ] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging
 
 ## Phase 5: Documentation
 
@@ -135,6 +134,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 ## Later
 
 - [ ] PostgreSQL + sqlc behind a `database` interface (deferred from Phase 1)
+- [ ] Sharing and visibility (private / unlisted / public) with signed media URLs (CloudFront signed URLs or S3 presigned GETs), so private videos stay private at the CDN as well as in the API
 - [ ] Asynchronous processing: the upload returns `202 Accepted`, and a worker pool runs ffprobe/ffmpeg and the upload with retries (`processing → ready | failed`). The UI polls for status.
 - [ ] Direct-to-S3 uploads with presigned PUT URLs, so large files never pass through the API
 - [ ] Automatic thumbnail generation with ffmpeg when none is uploaded

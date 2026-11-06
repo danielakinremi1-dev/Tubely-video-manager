@@ -1,0 +1,14 @@
+# Keep secrets, local data and build junk out of the image and build context.
+.env
+.env.*
+*.db
+*.db.*
+samples/
+assets/
+notes/
+.git/
+/tubely
+out
+infra/.terraform/
+*.tfstate*
+*.tfvars

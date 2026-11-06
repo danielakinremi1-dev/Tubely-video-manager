@@ -1,0 +1,36 @@
+# golangci-lint v2. Run with `make lint` (uses a local golangci-lint if
+# installed, otherwise the pinned Docker image).
+version: "2"
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - bodyclose  # HTTP response bodies must be closed
+    - errorlint  # wrapped errors need errors.Is/As, not == or type switches
+    - misspell
+    - nilerr     # returning nil after checking err != nil
+    - unconvert  # needless type conversions
+
+  settings:
+    errcheck:
+      # Best-effort cleanup: by the time these run there's nothing useful
+      # to do with an error (the response is decided, or the client is
+      # gone). Errors that matter, like a failed upload, are checked.
+      exclude-functions:
+        - os.Remove
+        - (*os.File).Close
+        - (mime/multipart.File).Close
+        - (*mime/multipart.Form).RemoveAll
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
+        - (net/http.ResponseWriter).Write
+  exclusions:
+    rules:
+      # Tests fail loudly on their own; unchecked cleanup there is noise.
+      - path: _test\.go
+        linters: [errcheck]
+
+formatters:
+  enable:
+    - gofmt

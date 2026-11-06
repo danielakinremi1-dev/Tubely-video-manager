@@ -1,49 +1,23 @@
-package main
+package api
 
 import (
 	"errors"
 	"net/http"
 
-	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
-	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
 	const maxThumbnailBytes = 10 << 20
 	r.Body = http.MaxBytesReader(w, r.Body, maxThumbnailBytes)
 
-	videoIDString := r.PathValue("videoID")
-	videoID, err := uuid.Parse(videoIDString)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid ID", err)
+	videoMetadata, ok := s.loadOwnedVideo(w, r)
+	if !ok {
 		return
 	}
+	extendDeadlines(w, thumbnailUploadTimeout)
 
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
-		return
-	}
-
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
-		return
-	}
-
-	videoMetadata, err := cfg.db.GetVideo(videoID)
-	if errors.Is(err, database.ErrNotFound) {
-		respondWithError(w, http.StatusNotFound, "Video not found", err)
-		return
-	} else if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
-		return
-	} else if videoMetadata.UserID != userID {
-		respondWithError(w, http.StatusForbidden, "You can't upload to this video", nil)
-		return
-	}
-
+	defer removeFormFiles(r)
 	// The whole (capped) body fits in memory, so nothing spills to disk.
 	if err := r.ParseMultipartForm(maxThumbnailBytes); err != nil {
 		status, msg := uploadFormError(err, "thumbnail", maxThumbnailBytes)
@@ -72,7 +46,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	thumbnailKey := newObjectKey("thumbnails/", fileExtension)
 
-	err = cfg.putObject(r.Context(), thumbnailKey, mediaType, reqFile)
+	err = s.store.Put(r.Context(), thumbnailKey, mediaType, reqFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload thumbnail", err)
 		return
@@ -80,9 +54,9 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	oldKey := videoMetadata.ThumbnailKey
 	videoMetadata.ThumbnailKey = &thumbnailKey
 
-	updated, err := cfg.db.UpdateVideo(videoMetadata)
+	updated, err := s.db.UpdateVideo(videoMetadata)
 	if err != nil {
-		cfg.deleteObject(r.Context(), &thumbnailKey) // don't orphan the new upload
+		s.deleteObject(r.Context(), &thumbnailKey) // don't orphan the new upload
 		if errors.Is(err, database.ErrNotFound) {
 			respondWithError(w, http.StatusNotFound, "Video was deleted during upload", err)
 			return
@@ -90,8 +64,8 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "Unable to update video data", err)
 		return
 	}
-	cfg.replaceObject(r.Context(), oldKey, thumbnailKey)
+	s.replaceObject(r.Context(), oldKey, thumbnailKey)
 
-	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(updated))
+	respondWithJSON(w, http.StatusOK, s.withMediaURLs(updated))
 
 }

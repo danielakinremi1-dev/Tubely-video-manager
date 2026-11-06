@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"errors"
@@ -8,7 +8,7 @@ import (
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 )
 
-func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	type response struct {
 		Token string `json:"token"`
 	}
@@ -19,7 +19,7 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := cfg.db.GetUserByRefreshToken(refreshToken)
+	user, err := s.db.GetUserByRefreshToken(refreshToken)
 	if errors.Is(err, database.ErrNotFound) {
 		respondWithError(w, http.StatusUnauthorized, "Invalid refresh token", err)
 		return
@@ -30,7 +30,7 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.MakeJWT(
 		user.ID,
-		cfg.jwtSecret,
+		s.jwtSecret,
 		accessTokenTTL,
 	)
 	if err != nil {
@@ -43,14 +43,14 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerRevoke(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't find token", err)
 		return
 	}
 
-	err = cfg.db.RevokeRefreshToken(refreshToken)
+	err = s.db.RevokeRefreshToken(refreshToken)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't revoke session", err)
 		return
