@@ -247,3 +247,31 @@ func TestDeleteSurvivesStorageCleanupFailure(t *testing.T) {
 		t.Errorf("row should be gone even though storage cleanup failed: %v", err)
 	}
 }
+
+// Large uploads spill to multipart temp files. net/http removes those only
+// for the request it created, but middleware passes handlers a copy
+// (r.WithContext), so handlers must remove them themselves.
+func TestLargeUploadLeavesNoMultipartTempFile(t *testing.T) {
+	old := videoFormMemory
+	videoFormMemory = 1024 // spill anything bigger than 1 KB to disk
+	t.Cleanup(func() { videoFormMemory = old })
+
+	for _, tc := range []struct {
+		name  string
+		setup func(e *uploadEnv)
+		want  int
+	}{
+		{"success", func(*uploadEnv) {}, http.StatusOK},
+		{"failure after parsing", func(e *uploadEnv) { e.fake.ProbeErr = errors.New("boom") }, http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newUploadEnv(t)
+			tc.setup(e)
+			big := append(append([]byte{}, mp4Bytes...), make([]byte, 4096)...)
+			if rec := e.upload(t, "video", big); rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tc.want, rec.Body)
+			}
+			e.assertNoTempFiles(t)
+		})
+	}
+}

@@ -17,6 +17,7 @@ func (s *Server) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) 
 	}
 	extendDeadlines(w, thumbnailUploadTimeout)
 
+	defer removeFormFiles(r)
 	// The whole (capped) body fits in memory, so nothing spills to disk.
 	if err := r.ParseMultipartForm(maxThumbnailBytes); err != nil {
 		status, msg := uploadFormError(err, "thumbnail", maxThumbnailBytes)

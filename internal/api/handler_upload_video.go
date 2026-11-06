@@ -10,6 +10,11 @@ import (
 	"github.com/danielakinremi1-dev/tubely/internal/media"
 )
 
+// videoFormMemory is how much of a video upload form is held in memory
+// before the rest spills to a temp file. A variable so tests can force the
+// spill with a small body.
+var videoFormMemory int64 = 32 << 20
+
 func (s *Server) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	const uploadLimit = 1 << 30
 	r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
@@ -20,6 +25,13 @@ func (s *Server) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	extendDeadlines(w, videoUploadTimeout)
 
+	defer removeFormFiles(r)
+	// Parts beyond videoFormMemory spill to a temp file.
+	if err := r.ParseMultipartForm(videoFormMemory); err != nil {
+		status, msg := uploadFormError(err, "video", uploadLimit)
+		respondWithError(w, status, msg, err)
+		return
+	}
 	f, _, err := r.FormFile("video")
 	if err != nil {
 		status, msg := uploadFormError(err, "video", uploadLimit)

@@ -19,6 +19,16 @@ func newObjectKey(prefix, ext string) string {
 	return prefix + uuid.NewString() + ext
 }
 
+// removeFormFiles deletes the temp files a parsed multipart form spilled to
+// disk. net/http does this only for the *http.Request it created, and our
+// middleware hands handlers a copy (r.WithContext), so any handler that
+// parses a multipart form must defer this itself.
+func removeFormFiles(r *http.Request) {
+	if r.MultipartForm != nil {
+		r.MultipartForm.RemoveAll()
+	}
+}
+
 // extendDeadlines lets one request run past the server-wide read and write
 // timeouts, for uploads that legitimately take minutes. Call it after the
 // caller is authenticated, so strangers don't get the longer limit.
