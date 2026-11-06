@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 
@@ -86,18 +85,15 @@ func main() {
 		log.Fatalf("Couldn't setup AWS configuration: %v", err)
 	}
 
-	srv := &http.Server{
-		Addr: ":" + port,
-		Handler: api.NewServer(api.Config{
-			DB:           db,
-			Store:        store,
-			Processor:    media.FFmpeg{},
-			JWTSecret:    jwtSecret,
-			Platform:     platform,
-			FilepathRoot: filepathRoot,
-			MediaBaseURL: mediaBaseURL,
-		}).Handler(),
-	}
+	srv := api.NewServer(api.Config{
+		DB:           db,
+		Store:        store,
+		Processor:    media.FFmpeg{},
+		JWTSecret:    jwtSecret,
+		Platform:     platform,
+		FilepathRoot: filepathRoot,
+		MediaBaseURL: mediaBaseURL,
+	}).HTTPServer(":" + port)
 
 	log.Printf("Serving on: http://localhost:%s/app/\n", port)
 	log.Fatal(srv.ListenAndServe())

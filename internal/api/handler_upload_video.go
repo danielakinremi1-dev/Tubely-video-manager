@@ -18,6 +18,7 @@ func (s *Server) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	extendDeadlines(w, videoUploadTimeout)
 
 	f, _, err := r.FormFile("video")
 	if err != nil {

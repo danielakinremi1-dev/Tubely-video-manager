@@ -95,7 +95,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] `requireAuth` middleware that puts the user ID into the request context (it replaces five copies of the JWT parsing), make `GET /api/videos/{id}` owner-only, and pin the JWT signing method to HS256
 
 **Operations**
-- [ ] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
+- [x] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
 - [ ] Graceful shutdown on SIGINT/SIGTERM
 - [ ] `log/slog` structured logging, request-ID middleware and panic recovery
 - [ ] Startup check that ffmpeg/ffprobe are on PATH, plus `GET /api/healthz`

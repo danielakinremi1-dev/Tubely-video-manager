@@ -5,6 +5,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/danielakinremi1-dev/tubely/internal/media"
@@ -26,6 +27,21 @@ type Config struct {
 	MediaBaseURL string
 }
 
+// Server-wide timeouts bound how long a slow or stalled client can hold a
+// connection open (a "slowloris" attack sends a request a byte at a time).
+// The upload routes extend their own deadlines once the caller is known.
+const (
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = time.Minute
+	writeTimeout      = 2 * time.Minute
+	idleTimeout       = 2 * time.Minute
+
+	// A 1 GB video at 5 Mbit/s takes about 27 minutes to arrive, then needs
+	// probing, remuxing and the S3 upload.
+	videoUploadTimeout     = 45 * time.Minute
+	thumbnailUploadTimeout = 5 * time.Minute
+)
+
 // Server holds the dependencies the handlers use.
 type Server struct {
 	db           database.Client
@@ -46,6 +62,18 @@ func NewServer(c Config) *Server {
 		platform:     c.Platform,
 		filepathRoot: c.FilepathRoot,
 		mediaBaseURL: c.MediaBaseURL,
+	}
+}
+
+// HTTPServer returns an http.Server for addr with the server-wide timeouts.
+func (s *Server) HTTPServer(addr string) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 }
 

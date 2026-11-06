@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +17,18 @@ import (
 // random bits from crypto/rand, so keys are unguessable and never collide.
 func newObjectKey(prefix, ext string) string {
 	return prefix + uuid.NewString() + ext
+}
+
+// extendDeadlines lets one request run past the server-wide read and write
+// timeouts, for uploads that legitimately take minutes. Call it after the
+// caller is authenticated, so strangers don't get the longer limit.
+func extendDeadlines(w http.ResponseWriter, d time.Duration) {
+	rc := http.NewResponseController(w)
+	deadline := time.Now().Add(d)
+	// These fail only for writers that aren't a real connection (such as
+	// httptest.ResponseRecorder), where there's no deadline to extend.
+	_ = rc.SetReadDeadline(deadline)
+	_ = rc.SetWriteDeadline(deadline)
 }
 
 // uploadFormError maps an error from parsing a multipart upload to a status
