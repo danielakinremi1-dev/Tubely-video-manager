@@ -21,7 +21,7 @@ make up                     # docker compose up -d (S3 emulator on :9090)
 go run ./cmd/tubely         # serves http://localhost:$PORT/app/  (or: make dev)
 make check                  # go build ./... && go vet ./... && go test ./...
 make lint                   # golangci-lint v2 (.golangci.yml); local binary, else the pinned Docker image
-make tf-fmt tf-validate     # offline Terraform checks for infra/ (no AWS credentials needed)
+make tf-fmt tf-validate tf-scan   # offline Terraform checks for infra/ (no AWS credentials); tf-scan is Trivy, with accepted findings in infra/.trivyignore
 make aws-up / dev-aws / smoke-aws / aws-down   # AWS demo stack (docs/AWS_DEMO.md). Calls real AWS: only with the user's explicit OK
 make test-integration       # also run S3 tests against the emulator (starts it)
 make up-app                 # build and run the API in Docker too (compose profile "app")

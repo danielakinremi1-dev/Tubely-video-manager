@@ -1,7 +1,8 @@
-.PHONY: up up-app down dev test test-integration smoke lint check tf-fmt tf-validate tf-lock aws-up dev-aws smoke-aws aws-down
+.PHONY: up up-app down dev test test-integration smoke lint check tf-fmt tf-validate tf-lock tf-scan aws-up dev-aws smoke-aws aws-down
 
 GOLANGCI_LINT_VERSION := v2.15.0
 TERRAFORM_VERSION := 1.17.1
+TRIVY_VERSION := 0.76.0
 
 # A local terraform if installed; otherwise the pinned image, running as you
 # so files it writes in infra/ aren't owned by root. The image is used only
@@ -45,6 +46,10 @@ tf-validate: ## Validate the Terraform configuration (offline, no AWS credential
 
 tf-lock: ## Record provider checksums for Linux and macOS in .terraform.lock.hcl
 	$(TERRAFORM) $(TF_DIR) providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_amd64 -platform=darwin_arm64
+
+tf-scan: ## Security-scan infra/ with Trivy (accepted findings: infra/.trivyignore)
+	docker run --rm -v "$(CURDIR)/infra":/infra:ro -w /infra aquasec/trivy:$(TRIVY_VERSION) \
+		config --quiet --exit-code 1 --ignorefile .trivyignore .
 
 aws-up: ## Create the AWS demo stack (asks before applying) and write .env.aws
 	scripts/aws-up.sh
