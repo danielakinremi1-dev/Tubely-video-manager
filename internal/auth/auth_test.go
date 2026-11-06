@@ -44,10 +44,28 @@ func TestValidateJWTRejects(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 
+	claims := jwt.RegisteredClaims{
+		Issuer:    string(TokenTypeAccess),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		Subject:   userID.String(),
+	}
+	// Correctly signed with the right secret, but not with HS256.
+	hs512, err := jwt.NewWithClaims(jwt.SigningMethodHS512, claims).SignedString([]byte("secret"))
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	// alg "none": no signature at all.
+	none, err := jwt.NewWithClaims(jwt.SigningMethodNone, claims).SignedString(jwt.UnsafeAllowNoneSignatureType)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
 	tests := []struct {
 		name, token, secret string
 	}{
 		{"wrong secret", valid, "other-secret"},
+		{"HS512 instead of HS256", hs512, "secret"},
+		{"alg none", none, "secret"},
 		{"expired", expired, "secret"},
 		{"wrong issuer", wrongIssuer, "secret"},
 		{"garbage", "not.a.jwt", "secret"},

@@ -55,10 +55,13 @@ func MakeJWT(
 
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	claimsStruct := jwt.RegisteredClaims{}
+	// Accept only the algorithm MakeJWT signs with. Without this, the token's
+	// own header picks the algorithm, which is how alg-confusion attacks work.
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&claimsStruct,
 		func(token *jwt.Token) (interface{}, error) { return []byte(tokenSecret), nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 	)
 	if err != nil {
 		return uuid.Nil, err

@@ -6,44 +6,16 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/danielakinremi1-dev/tubely/internal/media"
-	"github.com/google/uuid"
 )
 
 func (s *Server) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	const uploadLimit = 1 << 30
 	r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
 
-	videoIDString := r.PathValue("videoID")
-	videoID, err := uuid.Parse(videoIDString)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid ID", err)
-		return
-	}
-
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
-		return
-	}
-
-	userID, err := auth.ValidateJWT(token, s.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
-		return
-	}
-
-	videoMetadata, err := s.db.GetVideo(videoID)
-	if errors.Is(err, database.ErrNotFound) {
-		respondWithError(w, http.StatusNotFound, "Video not found", err)
-		return
-	} else if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to retrieve video metadata", err)
-		return
-	} else if videoMetadata.UserID != userID {
-		respondWithError(w, http.StatusForbidden, "You can't upload to this video", nil)
+	videoMetadata, ok := s.loadOwnedVideo(w, r)
+	if !ok {
 		return
 	}
 

@@ -111,6 +111,11 @@ All settings are environment variables, read from `.env` if it exists. The defau
 
 Protected routes need `Authorization: Bearer <access token>`. Errors look like `{"error": "..."}`.
 
+**Access model:**
+- Videos are private. Every video route requires an access token, and a video can only be read, changed or deleted by its owner. Anyone else gets `403`.
+- The media files themselves are served from unguessable URLs (`<prefix>/<uuid>.mp4`). Anyone you give that URL to can play the file.
+- Truly private media needs signed URLs, which are planned (see the roadmap's Later section).
+
 | Method and path | Auth | Description |
 |---|---|---|
 | `POST /api/users` | none | Sign up with `{"email", "password"}` → `201` |
@@ -119,7 +124,7 @@ Protected routes need `Authorization: Bearer <access token>`. Errors look like `
 | `POST /api/revoke` | refresh token | Revokes the refresh token → `204` |
 | `POST /api/videos` | access token | Creates a draft from `{"title", "description"}` → `201`. Titles are required and at most 100 characters. |
 | `GET /api/videos` | access token | Lists your videos, newest first |
-| `GET /api/videos/{videoID}` | none | Returns one video |
+| `GET /api/videos/{videoID}` | owner | Returns one of your videos |
 | `DELETE /api/videos/{videoID}` | owner | Deletes the video and its stored media → `204` |
 | `POST /api/video_upload/{videoID}` | owner | Multipart field `video`: an MP4 up to 1 GB |
 | `POST /api/thumbnail_upload/{videoID}` | owner | Multipart field `thumbnail`: a PNG or JPEG up to 10 MB |

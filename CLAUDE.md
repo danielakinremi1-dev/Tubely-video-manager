@@ -48,7 +48,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 
 ## Conventions
 
-- Every protected handler follows the same steps: parse the path ID, call `auth.GetBearerToken`, call `auth.ValidateJWT`, load the record (`ErrNotFound` → 404), check ownership (→ 403).
+- Protected routes are wrapped in `s.requireAuth(...)` in `server.go` (401 without a valid token); handlers read the caller with `userIDFrom(r.Context())`. Handlers for one video call `s.loadOwnedVideo(w, r)`, which handles bad IDs (400), missing rows (404) and other owners (403). Videos are private to their owner.
 - Errors go through `respondWithError(w, status, msg, err)`. Don't write raw `http.Error` calls.
 - New config comes from env vars read in `cmd/tubely/main.go` and passed in through `api.Config`, with a matching entry in `.env.example`. Optional vars need a sensible default. Don't make them `log.Fatal` when unset.
 - The module path is `github.com/danielakinremi1-dev/tubely`.

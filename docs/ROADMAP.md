@@ -92,7 +92,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] `storage` interface (`Put`, `Delete`) with the S3 implementation and an in-memory fake
 - [x] `media` interface (`Probe`, `FastStart`) with the ffmpeg implementation, a pure aspect-ratio classifier and a fake
 - [x] Split into `cmd/tubely`, `internal/api`, `internal/storage` and `internal/media`, next to the existing `internal/auth` and `internal/database`
-- [ ] `requireAuth` middleware that puts the user ID into the request context (it replaces five copies of the JWT parsing), and pin the JWT signing method to HS256
+- [x] `requireAuth` middleware that puts the user ID into the request context (it replaces five copies of the JWT parsing), make `GET /api/videos/{id}` owner-only, and pin the JWT signing method to HS256
 
 **Operations**
 - [ ] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
@@ -135,6 +135,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 ## Later
 
 - [ ] PostgreSQL + sqlc behind a `database` interface (deferred from Phase 1)
+- [ ] Sharing and visibility (private / unlisted / public) with signed media URLs (CloudFront signed URLs or S3 presigned GETs), so private videos stay private at the CDN as well as in the API
 - [ ] Asynchronous processing: the upload returns `202 Accepted`, and a worker pool runs ffprobe/ffmpeg and the upload with retries (`processing → ready | failed`). The UI polls for status.
 - [ ] Direct-to-S3 uploads with presigned PUT URLs, so large files never pass through the API
 - [ ] Automatic thumbnail generation with ffmpeg when none is uploaded

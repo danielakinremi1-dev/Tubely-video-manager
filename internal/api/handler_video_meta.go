@@ -7,9 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
-	"github.com/google/uuid"
 )
 
 const (
@@ -38,17 +36,6 @@ func (s *Server) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Request) 
 		database.CreateVideoParams
 	}
 
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
-		return
-	}
-	userID, err := auth.ValidateJWT(token, s.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
-		return
-	}
-
 	params := parameters{}
 	if !decodeJSON(w, r, &params) {
 		return
@@ -57,7 +44,7 @@ func (s *Server) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Request) 
 		respondWithError(w, http.StatusBadRequest, "Invalid video: "+err.Error(), err)
 		return
 	}
-	params.UserID = userID
+	params.UserID = userIDFrom(r.Context())
 
 	video, err := s.db.CreateVideo(params.CreateVideoParams)
 	if err != nil {
@@ -69,38 +56,12 @@ func (s *Server) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Request) {
-	videoIDString := r.PathValue("videoID")
-	videoID, err := uuid.Parse(videoIDString)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid ID", err)
+	video, ok := s.loadOwnedVideo(w, r)
+	if !ok {
 		return
 	}
 
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
-		return
-	}
-	userID, err := auth.ValidateJWT(token, s.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
-		return
-	}
-
-	video, err := s.db.GetVideo(videoID)
-	if errors.Is(err, database.ErrNotFound) {
-		respondWithError(w, http.StatusNotFound, "Video not found", err)
-		return
-	} else if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't get video", err)
-		return
-	}
-	if video.UserID != userID {
-		respondWithError(w, http.StatusForbidden, "You can't delete this video", err)
-		return
-	}
-
-	err = s.db.DeleteVideo(videoID)
+	err := s.db.DeleteVideo(video.ID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't delete video", err)
 		return
@@ -115,38 +76,15 @@ func (s *Server) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
-	videoIDString := r.PathValue("videoID")
-	videoID, err := uuid.Parse(videoIDString)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid video ID", err)
+	video, ok := s.loadOwnedVideo(w, r)
+	if !ok {
 		return
 	}
-
-	videoMetadata, err := s.db.GetVideo(videoID)
-	if errors.Is(err, database.ErrNotFound) {
-		respondWithError(w, http.StatusNotFound, "Video not found", err)
-		return
-	} else if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't get video", err)
-		return
-	}
-
-	respondWithJSON(w, http.StatusOK, s.withMediaURLs(videoMetadata))
+	respondWithJSON(w, http.StatusOK, s.withMediaURLs(video))
 }
 
 func (s *Server) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
-		return
-	}
-	userID, err := auth.ValidateJWT(token, s.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
-		return
-	}
-
-	videos, err := s.db.GetVideos(userID)
+	videos, err := s.db.GetVideos(userIDFrom(r.Context()))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve videos", err)
 		return

@@ -60,12 +60,12 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("POST /api/users", s.handlerUsersCreate)
 
-	mux.HandleFunc("POST /api/videos", s.handlerVideoMetaCreate)
-	mux.HandleFunc("POST /api/thumbnail_upload/{videoID}", s.handlerUploadThumbnail)
-	mux.HandleFunc("POST /api/video_upload/{videoID}", s.handlerUploadVideo)
-	mux.HandleFunc("GET /api/videos", s.handlerVideosRetrieve)
-	mux.HandleFunc("GET /api/videos/{videoID}", s.handlerVideoGet)
-	mux.HandleFunc("DELETE /api/videos/{videoID}", s.handlerVideoMetaDelete)
+	mux.HandleFunc("POST /api/videos", s.requireAuth(s.handlerVideoMetaCreate))
+	mux.HandleFunc("POST /api/thumbnail_upload/{videoID}", s.requireAuth(s.handlerUploadThumbnail))
+	mux.HandleFunc("POST /api/video_upload/{videoID}", s.requireAuth(s.handlerUploadVideo))
+	mux.HandleFunc("GET /api/videos", s.requireAuth(s.handlerVideosRetrieve))
+	mux.HandleFunc("GET /api/videos/{videoID}", s.requireAuth(s.handlerVideoGet))
+	mux.HandleFunc("DELETE /api/videos/{videoID}", s.requireAuth(s.handlerVideoMetaDelete))
 
 	mux.HandleFunc("POST /admin/reset", s.handlerReset)
 	return mux
