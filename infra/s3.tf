@@ -72,6 +72,27 @@ resource "aws_s3_bucket_lifecycle_configuration" "media" {
 }
 
 data "aws_iam_policy_document" "media_bucket" {
+  # Only this distribution may read objects. Without s3:ListBucket, a missing
+  # key comes back from CloudFront as 403 rather than 404, so the bucket's
+  # contents can't be probed.
+  statement {
+    sid       = "AllowCloudFrontRead"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.media.arn}/*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.media.arn]
+    }
+  }
+
   statement {
     sid     = "DenyInsecureTransport"
     effect  = "Deny"
