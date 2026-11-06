@@ -44,7 +44,7 @@ An upload works like this:
 
 | Piece | Locally (today) | On AWS |
 |---|---|---|
-| API and web UI | `go run ./cmd/tubely` on your machine | Not deployed yet |
+| API and web UI | `go run ./cmd/tubely`, or the Docker image (`make up-app`) | Not deployed yet |
 | Database | SQLite file (`DB_PATH`) | Not deployed yet |
 | Media storage | [S3Mock](https://github.com/adobe/S3Mock) in Docker on `:9090` | S3 bucket behind CloudFront, managed by Terraform in [Phase 3](docs/ROADMAP.md) |
 
@@ -81,11 +81,17 @@ To get sample videos and images to upload:
 ./samplesdownload.sh     # downloads them into samples/
 ```
 
+**Or run everything in Docker**, with no Go or ffmpeg on your machine:
+
+```bash
+make up-app              # builds the image and starts S3 + the API on :8091
+```
+
 Other commands:
 
 ```bash
-make down                # stop the emulator; uploads are kept
-docker compose down -v   # stop it and delete all uploaded media
+make down                # stop the containers; uploads are kept
+docker compose down -v   # stop them and delete all uploaded media
 ```
 
 ## Configuration
@@ -134,16 +140,24 @@ Protected routes need `Authorization: Bearer <access token>`. Errors look like `
 ## Testing
 
 ```bash
-make check               # go build, go vet and go test (no network needed)
+make check               # go build, go vet and go test (no network, no Docker)
 make test-integration    # also runs the S3 tests against the emulator (starts it)
+make up-app && make smoke  # end-to-end check against the running containers
 ```
 
-The tests cover:
-- the auth helpers;
+The unit and handler tests cover:
+- the auth helpers, including bearer-header parsing and HS256-only JWTs;
 - database queries and migrations, including adopting older databases and a rollback round trip;
-- upload validation and error codes, through `httptest`;
-- ffprobe classification using generated media;
-- single-part, multipart and cancelled uploads against S3Mock.
+- the whole upload path through the real router, using an in-memory store and a fake media processor. That includes every failure mode, and checks that each one leaves no objects, no key change and no temp files;
+- middleware (request IDs, access logs, panic recovery), server timeouts and graceful shutdown;
+- ffprobe and fast-start against small sample files in `internal/media/testdata`.
+
+The S3 integration tests run single-part, multipart and cancelled uploads against S3Mock. `scripts/smoke.sh` drives a running server over HTTP through:
+- every error code;
+- a 40 MB multipart upload and a client disconnect;
+- playback, range requests and delete.
+
+It then audits the bucket and the server's temp directory for leftovers.
 
 ## Project layout
 

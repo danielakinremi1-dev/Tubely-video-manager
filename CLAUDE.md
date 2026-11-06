@@ -21,6 +21,8 @@ make up                     # docker compose up -d (S3 emulator on :9090)
 go run ./cmd/tubely         # serves http://localhost:$PORT/app/  (or: make dev)
 make check                  # go build ./... && go vet ./... && go test ./...
 make test-integration       # also run S3 tests against the emulator (starts it)
+make up-app                 # build and run the API in Docker too (compose profile "app")
+make smoke                  # scripts/smoke.sh end-to-end check against make up-app
 make down                   # stop services; `docker compose down -v` wipes uploads
 ./samplesdownload.sh        # sample videos and images into samples/
 ```
@@ -42,7 +44,8 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 - `internal/database`: SQL by hand, with no ORM. Lookups return `database.ErrNotFound` when a row is missing.
 - `internal/database/migrations/`: numbered goose SQL migrations (`NNNNN_name.sql`), embedded in the binary. Never edit one that has shipped; add a new one.
 - `internal/auth`: JWT, refresh tokens, password hashing, bearer header parsing
-- `docker-compose.yml`, `Makefile`: local services and shortcuts
+- `docker-compose.yml`, `Makefile`, `Dockerfile`: local services (S3Mock, plus the app under the `app` profile), shortcuts, and the multi-stage image (cgo build, then bookworm-slim with ffmpeg, non-root)
+- `scripts/smoke.sh`: end-to-end HTTP check of a running server; run it after changes to the upload path
 - `app/`: frontend
 - `docs/`: public docs (`ROADMAP.md`)
 
