@@ -112,7 +112,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 Everything here is written and validated offline (`terraform fmt` / `validate` need no credentials). Nothing touches AWS until the Done-when demo, which needs an explicit go-ahead.
 
 - [x] `infra/` skeleton: Terraform and providers pinned (lock file committed), `default_tags` with `Project=tubely`, a region variable, local state only (git-ignored), and `make tf-fmt` / `make tf-validate`
-- [ ] Private S3 bucket: all public access blocked, bucket-owner-enforced, SSE-S3, a TLS-only policy, `force_destroy`, and lifecycle rules (expire objects after 7 days, abort incomplete multipart uploads after 1 day)
+- [x] Private S3 bucket: all public access blocked, bucket-owner-enforced, SSE-S3, a TLS-only policy, `force_destroy`, and lifecycle rules (expire objects after 7 days, abort incomplete multipart uploads after 1 day)
 - [ ] CloudFront with Origin Access Control, `PriceClass_100` and HTTPS only; the bucket policy lets only that distribution read
 - [ ] Least-privilege app role: `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on `bucket/*` only, assumed for temporary credentials (no long-lived keys). The app never reads objects; CloudFront does.
 - [ ] AWS Budgets alert ($1 actual, $5 forecast), included in the first apply
