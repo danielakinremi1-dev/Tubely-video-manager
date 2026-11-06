@@ -109,12 +109,14 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 ## Phase 3: AWS infrastructure as code
 
-- [ ] `infra/` Terraform with the provider pinned. Private S3 bucket (all public access blocked, `force_destroy`, 7-day expiry lifecycle rule).
-- [ ] CloudFront with Origin Access Control, `PriceClass_100`, HTTPS only, and a bucket policy limited to that distribution
-- [ ] Least-privilege IAM for the app: `s3:GetObject`, `s3:PutObject` and `s3:DeleteObject` on `bucket/*` only
+Everything here is written and validated offline (`terraform fmt` / `validate` need no credentials). Nothing touches AWS until the Done-when demo, which needs an explicit go-ahead.
+
+- [ ] `infra/` skeleton: Terraform and providers pinned (lock file committed), `default_tags` with `Project=tubely`, a region variable, local state only (git-ignored), and `make tf-fmt` / `make tf-validate`
+- [ ] Private S3 bucket: all public access blocked, bucket-owner-enforced, SSE-S3, a TLS-only policy, `force_destroy`, and lifecycle rules (expire objects after 7 days, abort incomplete multipart uploads after 1 day)
+- [ ] CloudFront with Origin Access Control, `PriceClass_100` and HTTPS only; the bucket policy lets only that distribution read
+- [ ] Least-privilege app role: `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on `bucket/*` only, assumed for temporary credentials (no long-lived keys). The app never reads objects; CloudFront does.
 - [ ] AWS Budgets alert ($1 actual, $5 forecast), included in the first apply
-- [ ] Every resource tagged `Project=tubely`; outputs for `bucket_name` and `cloudfront_domain`; local state only (git-ignored)
-- [ ] `docs/AWS_DEMO.md` runbook plus `make aws-up` (apply, then write `.env.aws`) and `make aws-down` (destroy, then check that nothing tagged `Project=tubely` is left)
+- [ ] `docs/AWS_DEMO.md` runbook, an `ENV_FILE` setting, `make aws-up` (apply, then write `.env.aws`), `make dev-aws`, and `make aws-down` (destroy, then check that nothing tagged `Project=tubely` is left)
 
 **Done when:** `make aws-up` → upload and play a video → `make aws-down` works end to end.
 
