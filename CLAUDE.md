@@ -31,7 +31,8 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 
 - `main.go`: env/config loading, the `apiConfig` struct, routes
 - `handler_*.go`: one file per resource. Handlers are methods on `*apiConfig`.
-- `helper_functions_upload.go`: ffmpeg/ffprobe helpers, file extensions, object key generation
+- `helper_functions_upload.go`: content-type sniffing, upload form errors, file extensions, object key generation
+- `internal/media`: the `Processor` interface (`Probe`, `FastStart`), the `FFmpeg` implementation (timeouts, stderr in errors), `ClassifyAspectRatio` and a `Fake` for tests
 - `internal/storage`: the `Store` interface for media objects, the S3 implementation (endpoint, path-style, multipart via the transfer manager) and an in-memory `Memory` store for tests
 - `objects.go`: `deleteObject` / `replaceObject`, which log failures and don't return them
 - `media_url.go`: `MEDIA_BASE_URL` resolution and key → URL building

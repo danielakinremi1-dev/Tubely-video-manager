@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
+	"github.com/danielakinremi1-dev/tubely/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -80,9 +81,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// Probe first: it's cheap, and it rejects files that aren't playable
 	// video before the remux spends time on them.
-	prefix := "other/"
-	aspectRatio, err := getVideoAspectRatio(r.Context(), tmp.Name())
-	if errors.Is(err, errInvalidMedia) {
+	info, err := cfg.processor.Probe(r.Context(), tmp.Name())
+	if errors.Is(err, media.ErrInvalidMedia) {
 		respondWithError(w, http.StatusUnprocessableEntity, "File is not a playable video", err)
 		return
 	} else if err != nil {
@@ -90,13 +90,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if aspectRatio == "16:9" {
-		prefix = "landscape/"
-	} else if aspectRatio == "9:16" {
-		prefix = "portrait/"
-	}
-
-	tmpProcessed, err := processVideoForFastStart(r.Context(), tmp.Name())
+	tmpProcessed, err := cfg.processor.FastStart(r.Context(), tmp.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to process video for fast start encoding", err)
 		return
@@ -110,7 +104,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	defer tmpProcessedFile.Close()
 
-	fileKey := newObjectKey(prefix, getExtension(mediaType))
+	fileKey := newObjectKey(keyPrefix(info.AspectRatio()), getExtension(mediaType))
 
 	// A cancelled request (client gone) aborts the upload, and neither a
 	// failed PutObject nor an aborted multipart upload leaves an object.
@@ -136,4 +130,16 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	cfg.replaceObject(r.Context(), oldKey, fileKey)
 
 	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(updated))
+}
+
+// keyPrefix files videos under their shape: landscape/, portrait/ or other/.
+func keyPrefix(aspectRatio string) string {
+	switch aspectRatio {
+	case media.Landscape:
+		return "landscape/"
+	case media.Portrait:
+		return "portrait/"
+	default:
+		return "other/"
+	}
 }

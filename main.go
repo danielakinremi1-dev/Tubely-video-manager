@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/danielakinremi1-dev/tubely/internal/database"
+	"github.com/danielakinremi1-dev/tubely/internal/media"
 	"github.com/danielakinremi1-dev/tubely/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -21,6 +22,7 @@ type apiConfig struct {
 	mediaBaseURL string
 	port         string
 	store        storage.Store
+	processor    media.Processor
 }
 
 func main() {
@@ -101,6 +103,7 @@ func main() {
 		filepathRoot: filepathRoot,
 		mediaBaseURL: mediaBaseURL,
 		store:        store,
+		processor:    media.FFmpeg{},
 		port:         port,
 	}
 

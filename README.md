@@ -144,13 +144,14 @@ The tests cover:
 ```
 main.go                   config from env, wiring, routes
 handler_*.go              HTTP handlers, one file per resource
-helper_functions_upload.go  ffmpeg/ffprobe, type sniffing, object keys
+helper_functions_upload.go  type sniffing, upload form errors, object keys
 objects.go                object cleanup after deletes and re-uploads
 media_url.go              object key → public URL
 json.go                   JSON responses and request decoding
 internal/auth             JWTs, refresh tokens, password hashing
 internal/database         hand-written SQL and goose migrations
 internal/storage          Store interface: S3 (multipart) and in-memory
+internal/media            Processor interface: ffprobe/ffmpeg and a test fake
 app/                      web UI (vanilla JS, no build step)
 docs/ROADMAP.md           phased plan and progress
 ```

@@ -3,12 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
+	"github.com/danielakinremi1-dev/tubely/internal/media"
 	"github.com/danielakinremi1-dev/tubely/internal/storage"
 	"github.com/google/uuid"
 )
@@ -34,6 +35,7 @@ func newTestConfig(t *testing.T) *apiConfig {
 		jwtSecret:    "test-secret",
 		mediaBaseURL: "http://media.test",
 		store:        storage.NewMemory(),
+		processor:    &media.Fake{Info: media.Info{Width: 1280, Height: 720}},
 	}
 }
 
@@ -256,16 +258,14 @@ func TestCreateVideoValidation(t *testing.T) {
 }
 
 // A file that sniffs as MP4 but isn't playable is the client's problem.
-func TestVideoUploadRejectsCorruptMP4(t *testing.T) {
-	if _, err := exec.LookPath("ffprobe"); err != nil {
-		t.Skip("ffprobe not on PATH")
-	}
+func TestVideoUploadRejectsUnplayableVideo(t *testing.T) {
 	cfg := newTestConfig(t)
+	cfg.processor = &media.Fake{ProbeErr: fmt.Errorf("%w: moov atom not found", media.ErrInvalidMedia)}
 	owner, token := newTestUser(t, cfg, "owner@example.com")
 	video := newTestVideo(t, cfg, owner)
 
-	corrupt := append([]byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"), bytes.Repeat([]byte{0xAB}, 4096)...)
-	body, ctype := multipartBody(t, "video", "video/mp4", corrupt)
+	mp4 := []byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
+	body, ctype := multipartBody(t, "video", "video/mp4", mp4)
 	req := httptest.NewRequest("POST", "/api/video_upload/"+video.ID.String(), body)
 	req.Header.Set("Content-Type", ctype)
 	req.Header.Set("Authorization", "Bearer "+token)
