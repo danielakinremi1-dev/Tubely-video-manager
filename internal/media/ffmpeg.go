@@ -93,7 +93,10 @@ func runTool(ctx context.Context, timeout time.Duration, name string, args ...st
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			err = fmt.Errorf("%w (%v)", ctxErr, err)
+			// Wrap only the context error. The process error is a
+			// *exec.ExitError ("signal: killed"), and Probe treats exit
+			// errors as "the file is bad" (422); a timeout is our problem.
+			err = fmt.Errorf("%w (%v)", ctxErr, err) //nolint:errorlint // see above
 		}
 		return nil, fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(stderr.String()))
 	}

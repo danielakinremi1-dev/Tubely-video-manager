@@ -66,6 +66,12 @@ func TestRunToolTimeoutAndStderr(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("slow command: err = %v, want DeadlineExceeded", err)
 	}
+	// A timeout must not look like the tool rejecting its input, or Probe
+	// would answer 422 ("not a playable video") for our own slowness.
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		t.Errorf("timeout error %v unwraps to *exec.ExitError", err)
+	}
 
 	_, err = runTool(context.Background(), time.Second, "sh", "-c", "echo boom >&2; exit 3")
 	if err == nil || !strings.Contains(err.Error(), "boom") {

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"log/slog"
 	"net"
 	"os"
@@ -18,7 +20,9 @@ import (
 )
 
 func main() {
-	godotenv.Load(".env")
+	// .env is optional (containers set real env vars), but a malformed one
+	// is an error worth stopping for. Variables already set win.
+	envErr := godotenv.Load(".env")
 
 	// Human-readable logs in development; JSON (one object per line, easy to
 	// search and ship to a log service) everywhere else.
@@ -27,6 +31,9 @@ func main() {
 		logHandler = slog.NewTextHandler(os.Stderr, nil)
 	}
 	slog.SetDefault(slog.New(logHandler))
+	if envErr != nil && !errors.Is(envErr, fs.ErrNotExist) {
+		fatal("couldn't read .env", "error", envErr)
+	}
 
 	processor := media.FFmpeg{}
 	if err := processor.CheckInstalled(); err != nil {

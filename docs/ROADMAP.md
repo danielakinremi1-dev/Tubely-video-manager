@@ -105,7 +105,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] Handler tests with `httptest` and the fake storage/media implementations
 - [x] Small sample MP4s in `testdata/` for the ffprobe tests
 - [x] Multi-stage `Dockerfile` with ffmpeg, an `app` service in compose, and `scripts/smoke.sh` (the end-to-end upload check)
-- [ ] `make lint` (golangci-lint)
+- [x] `make lint` (golangci-lint)
 
 **Done when:** handlers have no direct AWS or ffmpeg calls, and `go test ./...` covers the main upload path without network access.
 

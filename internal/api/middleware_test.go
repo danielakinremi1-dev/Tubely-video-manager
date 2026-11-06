@@ -96,8 +96,7 @@ func TestAccessLog(t *testing.T) {
 func TestRecoverPanics(t *testing.T) {
 	srv, buf := newLoggedServer(t)
 	h := srv.withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var m map[string]int
-		m["boom"]++ // nil map write: panics
+		panic("boom")
 	}))
 
 	rec := httptest.NewRecorder()

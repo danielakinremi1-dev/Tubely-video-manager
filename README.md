@@ -141,6 +141,7 @@ Protected routes need `Authorization: Bearer <access token>`. Errors look like `
 
 ```bash
 make check               # go build, go vet and go test (no network, no Docker)
+make lint                # golangci-lint (uses Docker if it isn't installed)
 make test-integration    # also runs the S3 tests against the emulator (starts it)
 make up-app && make smoke  # end-to-end check against the running containers
 ```

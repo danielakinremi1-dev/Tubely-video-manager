@@ -51,7 +51,8 @@ func TestServeDrainsInFlightRequests(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Errorf("serve: %v", err)
 	}
-	if _, err := http.Get(url); err == nil {
+	if res, err := http.Get(url); err == nil {
+		res.Body.Close()
 		t.Error("server still accepting connections after shutdown")
 	}
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -121,7 +122,7 @@ func recoverPanics(next http.Handler) http.Handler {
 			if v == nil {
 				return
 			}
-			if v == http.ErrAbortHandler {
+			if err, ok := v.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 				panic(v) // net/http's deliberate "abort this response"
 			}
 			logFrom(r.Context()).Error("panic", "panic", v, "stack", string(debug.Stack()))

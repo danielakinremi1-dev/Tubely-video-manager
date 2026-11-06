@@ -20,6 +20,7 @@ cp .env.example .env        # local defaults work as-is with the emulator
 make up                     # docker compose up -d (S3 emulator on :9090)
 go run ./cmd/tubely         # serves http://localhost:$PORT/app/  (or: make dev)
 make check                  # go build ./... && go vet ./... && go test ./...
+make lint                   # golangci-lint v2 (.golangci.yml); local binary, else the pinned Docker image
 make test-integration       # also run S3 tests against the emulator (starts it)
 make up-app                 # build and run the API in Docker too (compose profile "app")
 make smoke                  # scripts/smoke.sh end-to-end check against make up-app
@@ -70,7 +71,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 
 - Before editing, read the relevant phase in `docs/ROADMAP.md`. Tick each item as it lands, in the same commit.
 - One commit per roadmap checkbox, with a clear message. Stage files by path, never `git add -A`. Don't push unless asked.
-- After each commit-sized change, run `go build ./... && go vet ./... && go test ./...` and `gofmt -l .`. Never commit a failing build.
+- After each commit-sized change, run `go build ./... && go vet ./... && go test ./...`, `gofmt -l .` and `make lint`. Never commit a failing build or new lint findings. Fix the cause rather than adding `//nolint`; when a finding is deliberate, use `//nolint:<linter> // reason`.
 - At the end of each phase, stop for the user's review before starting the next one.
 - For frontend changes, list the manual browser checks the user should do, because JS can't be run here.
 - Keep the README accurate for a newcomer: a quickstart that works locally, an architecture diagram, and an honest description of what runs locally and what runs on AWS.
