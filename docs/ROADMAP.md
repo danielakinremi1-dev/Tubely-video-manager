@@ -6,7 +6,7 @@ Tubely is being developed in phases from a single-binary course project into a p
 
 ## Architecture
 
-**Today (after Phase 1):** one Go process. It handles auth, validates uploads by their bytes, runs ffprobe and ffmpeg in the request path under timeouts, and sends videos and thumbnails to an S3-compatible bucket (the local emulator, or AWS), using multipart uploads for large files. SQLite stores object keys, not URLs, and its schema is versioned with goose. Handlers still call S3 and ffmpeg directly; Phase 2 puts them behind interfaces.
+**Today (after Phase 2):** one Go process, `cmd/tubely`, which wires concrete implementations into `internal/api`. The API layer handles auth (`requireAuth` middleware; videos are owner-only), validates uploads by their bytes, and reaches media storage and processing only through the `storage.Store` and `media.Processor` interfaces: S3 (multipart) and ffprobe/ffmpeg in production, an in-memory store and a fake in tests. SQLite stores object keys, not URLs, with a goose-versioned schema. The server has timeouts, graceful shutdown, structured request logs and a health check, and ships as a Docker image. ffmpeg still runs in the request path; moving it to a background worker is under Later.
 
 **Target:**
 
@@ -84,9 +84,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 **Done when:** every upload failure mode returns the correct 4xx/5xx with a JSON error, and no temp files or orphaned objects are left behind.
 
-## Phase 2: Structure and operability
-
-**Start here** when resuming. Boxes are in commit order: the interfaces come before the package split, so each diff stays small.
+## Phase 2: Structure and operability ✅
 
 **Structure**
 - [x] `storage` interface (`Put`, `Delete`) with the S3 implementation and an in-memory fake

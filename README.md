@@ -177,8 +177,14 @@ The API layer depends only on the `storage.Store` and `media.Processor` interfac
 
 ## Status
 
-Phases 0 to 1 of the [roadmap](docs/ROADMAP.md) are done: crash fixes, local S3-compatible storage, and a correct upload pipeline. The next phases cover:
-- **Phase 2:** package structure, interfaces and operations (timeouts, graceful shutdown, structured logs, Docker).
+Phases 0 to 2 of the [roadmap](docs/ROADMAP.md) are done:
+- crash fixes;
+- local S3-compatible storage;
+- a correct upload pipeline;
+- a layered structure with tested interfaces;
+- operational basics (timeouts, graceful shutdown, structured logs, a health check, Docker).
+
+The next phases:
 - **Phase 3:** Terraform for AWS with budget guardrails.
 - **Phase 4:** CI.
 - **Phase 5:** documentation.
