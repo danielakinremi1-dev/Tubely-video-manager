@@ -7,7 +7,7 @@ down: ## Stop local services (uploads are kept; `docker compose down -v` wipes t
 	docker compose down
 
 dev: up ## Start services and run the server
-	go run .
+	go run ./cmd/tubely
 
 test: ## Run the test suite
 	go test ./...

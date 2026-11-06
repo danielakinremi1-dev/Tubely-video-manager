@@ -91,7 +91,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 **Structure**
 - [x] `storage` interface (`Put`, `Delete`) with the S3 implementation and an in-memory fake
 - [x] `media` interface (`Probe`, `FastStart`) with the ffmpeg implementation, a pure aspect-ratio classifier and a fake
-- [ ] Split into `cmd/tubely`, `internal/api`, `internal/storage` and `internal/media`, next to the existing `internal/auth` and `internal/database`
+- [x] Split into `cmd/tubely`, `internal/api`, `internal/storage` and `internal/media`, next to the existing `internal/auth` and `internal/database`
 - [ ] `requireAuth` middleware that puts the user ID into the request context (it replaces five copies of the JWT parsing), and pin the JWT signing method to HS256
 
 **Operations**

@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"errors"
@@ -33,7 +33,7 @@ func validateVideoParams(p *database.CreateVideoParams) error {
 	return nil
 }
 
-func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		database.CreateVideoParams
 	}
@@ -43,7 +43,7 @@ func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
 		return
 	}
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	userID, err := auth.ValidateJWT(token, s.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
 		return
@@ -59,16 +59,16 @@ func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Requ
 	}
 	params.UserID = userID
 
-	video, err := cfg.db.CreateVideo(params.CreateVideoParams)
+	video, err := s.db.CreateVideo(params.CreateVideoParams)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create video", err)
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, cfg.withMediaURLs(video))
+	respondWithJSON(w, http.StatusCreated, s.withMediaURLs(video))
 }
 
-func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Request) {
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -81,13 +81,13 @@ func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
 		return
 	}
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	userID, err := auth.ValidateJWT(token, s.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
 		return
 	}
 
-	video, err := cfg.db.GetVideo(videoID)
+	video, err := s.db.GetVideo(videoID)
 	if errors.Is(err, database.ErrNotFound) {
 		respondWithError(w, http.StatusNotFound, "Video not found", err)
 		return
@@ -100,7 +100,7 @@ func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	err = cfg.db.DeleteVideo(videoID)
+	err = s.db.DeleteVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't delete video", err)
 		return
@@ -108,13 +108,13 @@ func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Requ
 
 	// Remove the row first, then its objects: if storage cleanup fails we
 	// leave a logged orphan object, never a row pointing at a missing file.
-	cfg.deleteObject(r.Context(), video.VideoKey)
-	cfg.deleteObject(r.Context(), video.ThumbnailKey)
+	s.deleteObject(r.Context(), video.VideoKey)
+	s.deleteObject(r.Context(), video.ThumbnailKey)
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -122,7 +122,7 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videoMetadata, err := cfg.db.GetVideo(videoID)
+	videoMetadata, err := s.db.GetVideo(videoID)
 	if errors.Is(err, database.ErrNotFound) {
 		respondWithError(w, http.StatusNotFound, "Video not found", err)
 		return
@@ -131,29 +131,29 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(videoMetadata))
+	respondWithJSON(w, http.StatusOK, s.withMediaURLs(videoMetadata))
 }
 
-func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
 		return
 	}
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	userID, err := auth.ValidateJWT(token, s.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
 		return
 	}
 
-	videos, err := cfg.db.GetVideos(userID)
+	videos, err := s.db.GetVideos(userID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve videos", err)
 		return
 	}
 
 	for i := range videos {
-		videos[i] = cfg.withMediaURLs(videos[i])
+		videos[i] = s.withMediaURLs(videos[i])
 	}
 	respondWithJSON(w, http.StatusOK, videos)
 }

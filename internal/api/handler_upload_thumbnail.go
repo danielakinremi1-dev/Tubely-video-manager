@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
 	const maxThumbnailBytes = 10 << 20
 	r.Body = http.MaxBytesReader(w, r.Body, maxThumbnailBytes)
 
@@ -26,13 +26,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	userID, err := auth.ValidateJWT(token, s.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
 		return
 	}
 
-	videoMetadata, err := cfg.db.GetVideo(videoID)
+	videoMetadata, err := s.db.GetVideo(videoID)
 	if errors.Is(err, database.ErrNotFound) {
 		respondWithError(w, http.StatusNotFound, "Video not found", err)
 		return
@@ -72,7 +72,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	thumbnailKey := newObjectKey("thumbnails/", fileExtension)
 
-	err = cfg.store.Put(r.Context(), thumbnailKey, mediaType, reqFile)
+	err = s.store.Put(r.Context(), thumbnailKey, mediaType, reqFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload thumbnail", err)
 		return
@@ -80,9 +80,9 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	oldKey := videoMetadata.ThumbnailKey
 	videoMetadata.ThumbnailKey = &thumbnailKey
 
-	updated, err := cfg.db.UpdateVideo(videoMetadata)
+	updated, err := s.db.UpdateVideo(videoMetadata)
 	if err != nil {
-		cfg.deleteObject(r.Context(), &thumbnailKey) // don't orphan the new upload
+		s.deleteObject(r.Context(), &thumbnailKey) // don't orphan the new upload
 		if errors.Is(err, database.ErrNotFound) {
 			respondWithError(w, http.StatusNotFound, "Video was deleted during upload", err)
 			return
@@ -90,8 +90,8 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "Unable to update video data", err)
 		return
 	}
-	cfg.replaceObject(r.Context(), oldKey, thumbnailKey)
+	s.replaceObject(r.Context(), oldKey, thumbnailKey)
 
-	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(updated))
+	respondWithJSON(w, http.StatusOK, s.withMediaURLs(updated))
 
 }

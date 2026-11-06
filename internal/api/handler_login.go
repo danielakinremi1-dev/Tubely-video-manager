@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"net/http"
@@ -12,7 +12,7 @@ import (
 // (POST /api/refresh) to obtain new access tokens for long sessions.
 const accessTokenTTL = time.Hour
 
-func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
@@ -28,7 +28,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := cfg.db.GetUserByEmail(params.Email)
+	user, err := s.db.GetUserByEmail(params.Email)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
@@ -46,7 +46,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.MakeJWT(
 		user.ID,
-		cfg.jwtSecret,
+		s.jwtSecret,
 		accessTokenTTL,
 	)
 	if err != nil {
@@ -60,7 +60,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = cfg.db.CreateRefreshToken(database.CreateRefreshTokenParams{
+	_, err = s.db.CreateRefreshToken(database.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		Token:     refreshToken,
 		ExpiresAt: time.Now().UTC().Add(time.Hour * 24 * 60),

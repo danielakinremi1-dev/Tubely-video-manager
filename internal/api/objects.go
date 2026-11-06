@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -11,18 +11,18 @@ import (
 //
 // The context is detached from the request's cancellation so cleanup still
 // runs if the client disconnects right after the response.
-func (cfg *apiConfig) deleteObject(ctx context.Context, key *string) {
+func (s *Server) deleteObject(ctx context.Context, key *string) {
 	if key == nil || *key == "" {
 		return
 	}
-	if err := cfg.store.Delete(context.WithoutCancel(ctx), *key); err != nil {
+	if err := s.store.Delete(context.WithoutCancel(ctx), *key); err != nil {
 		log.Printf("couldn't delete object %q: %v", *key, err)
 	}
 }
 
 // replaceObject deletes the previous object after a successful re-upload.
-func (cfg *apiConfig) replaceObject(ctx context.Context, oldKey *string, newKey string) {
+func (s *Server) replaceObject(ctx context.Context, oldKey *string, newKey string) {
 	if oldKey != nil && *oldKey != newKey {
-		cfg.deleteObject(ctx, oldKey)
+		s.deleteObject(ctx, oldKey)
 	}
 }

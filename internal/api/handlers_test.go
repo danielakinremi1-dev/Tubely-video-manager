@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"bytes"
@@ -21,16 +21,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// newTestConfig returns an apiConfig backed by a throwaway SQLite file and an
+// newTestServer returns a Server backed by a throwaway SQLite file and an
 // in-memory media store.
-func newTestConfig(t *testing.T) *apiConfig {
+func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	db, err := database.NewClient(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return &apiConfig{
+	return &Server{
 		db:           db,
 		jwtSecret:    "test-secret",
 		mediaBaseURL: "http://media.test",
@@ -40,22 +40,22 @@ func newTestConfig(t *testing.T) *apiConfig {
 }
 
 // newTestUser creates a user and returns its ID and a valid access token.
-func newTestUser(t *testing.T, cfg *apiConfig, email string) (uuid.UUID, string) {
+func newTestUser(t *testing.T, srv *Server, email string) (uuid.UUID, string) {
 	t.Helper()
-	u, err := cfg.db.CreateUser(database.CreateUserParams{Email: email, Password: "hash"})
+	u, err := srv.db.CreateUser(database.CreateUserParams{Email: email, Password: "hash"})
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	token, err := auth.MakeJWT(u.ID, cfg.jwtSecret, time.Hour)
+	token, err := auth.MakeJWT(u.ID, srv.jwtSecret, time.Hour)
 	if err != nil {
 		t.Fatalf("MakeJWT: %v", err)
 	}
 	return u.ID, token
 }
 
-func newTestVideo(t *testing.T, cfg *apiConfig, owner uuid.UUID) database.Video {
+func newTestVideo(t *testing.T, srv *Server, owner uuid.UUID) database.Video {
 	t.Helper()
-	v, err := cfg.db.CreateVideo(database.CreateVideoParams{Title: "t", UserID: owner})
+	v, err := srv.db.CreateVideo(database.CreateVideoParams{Title: "t", UserID: owner})
 	if err != nil {
 		t.Fatalf("CreateVideo: %v", err)
 	}
@@ -103,17 +103,17 @@ func assertJSONError(t *testing.T, rec *httptest.ResponseRecorder, wantStatus in
 }
 
 func TestUploadOwnershipIsForbidden(t *testing.T) {
-	cfg := newTestConfig(t)
-	owner, _ := newTestUser(t, cfg, "owner@example.com")
-	_, otherToken := newTestUser(t, cfg, "other@example.com")
-	video := newTestVideo(t, cfg, owner)
+	srv := newTestServer(t)
+	owner, _ := newTestUser(t, srv, "owner@example.com")
+	_, otherToken := newTestUser(t, srv, "other@example.com")
+	video := newTestVideo(t, srv, owner)
 
 	cases := []struct {
 		name, pattern, path, field, ctype string
 		h                                 http.HandlerFunc
 	}{
-		{"video", "POST /api/video_upload/{videoID}", "/api/video_upload/", "video", "video/mp4", cfg.handlerUploadVideo},
-		{"thumbnail", "POST /api/thumbnail_upload/{videoID}", "/api/thumbnail_upload/", "thumbnail", "image/png", cfg.handlerUploadThumbnail},
+		{"video", "POST /api/video_upload/{videoID}", "/api/video_upload/", "video", "video/mp4", srv.handlerUploadVideo},
+		{"thumbnail", "POST /api/thumbnail_upload/{videoID}", "/api/thumbnail_upload/", "thumbnail", "image/png", srv.handlerUploadThumbnail},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -127,9 +127,9 @@ func TestUploadOwnershipIsForbidden(t *testing.T) {
 }
 
 func TestUploadRejectsSpoofedContentType(t *testing.T) {
-	cfg := newTestConfig(t)
-	owner, token := newTestUser(t, cfg, "owner@example.com")
-	video := newTestVideo(t, cfg, owner)
+	srv := newTestServer(t)
+	owner, token := newTestUser(t, srv, "owner@example.com")
+	video := newTestVideo(t, srv, owner)
 
 	cases := []struct {
 		name, pattern, path, field, claimed string
@@ -137,9 +137,9 @@ func TestUploadRejectsSpoofedContentType(t *testing.T) {
 		h                                   http.HandlerFunc
 	}{
 		{"pdf claiming mp4", "POST /api/video_upload/{videoID}", "/api/video_upload/", "video", "video/mp4",
-			[]byte("%PDF-1.4\n%fake"), cfg.handlerUploadVideo},
+			[]byte("%PDF-1.4\n%fake"), srv.handlerUploadVideo},
 		{"gif claiming png", "POST /api/thumbnail_upload/{videoID}", "/api/thumbnail_upload/", "thumbnail", "image/png",
-			[]byte("GIF89a\x01\x00\x01\x00"), cfg.handlerUploadThumbnail},
+			[]byte("GIF89a\x01\x00\x01\x00"), srv.handlerUploadThumbnail},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -153,9 +153,9 @@ func TestUploadRejectsSpoofedContentType(t *testing.T) {
 }
 
 func TestThumbnailUploadFormErrors(t *testing.T) {
-	cfg := newTestConfig(t)
-	owner, token := newTestUser(t, cfg, "owner@example.com")
-	video := newTestVideo(t, cfg, owner)
+	srv := newTestServer(t)
+	owner, token := newTestUser(t, srv, "owner@example.com")
+	video := newTestVideo(t, srv, owner)
 	const pattern = "POST /api/thumbnail_upload/{videoID}"
 
 	tooBig, tooBigType := multipartBody(t, "thumbnail", "image/png",
@@ -177,22 +177,22 @@ func TestThumbnailUploadFormErrors(t *testing.T) {
 			req := httptest.NewRequest("POST", "/api/thumbnail_upload/"+video.ID.String(), tc.body)
 			req.Header.Set("Content-Type", tc.contentType)
 			req.Header.Set("Authorization", "Bearer "+token)
-			assertJSONError(t, serve(pattern, cfg.handlerUploadThumbnail, req), tc.want)
+			assertJSONError(t, serve(pattern, srv.handlerUploadThumbnail, req), tc.want)
 		})
 	}
 }
 
 func TestJSONBodyErrors(t *testing.T) {
-	cfg := newTestConfig(t)
-	_, token := newTestUser(t, cfg, "owner@example.com")
+	srv := newTestServer(t)
+	_, token := newTestUser(t, srv, "owner@example.com")
 
 	endpoints := []struct {
 		name, pattern, path string
 		h                   http.HandlerFunc
 	}{
-		{"create user", "POST /api/users", "/api/users", cfg.handlerUsersCreate},
-		{"login", "POST /api/login", "/api/login", cfg.handlerLogin},
-		{"create video", "POST /api/videos", "/api/videos", cfg.handlerVideoMetaCreate},
+		{"create user", "POST /api/users", "/api/users", srv.handlerUsersCreate},
+		{"login", "POST /api/login", "/api/login", srv.handlerLogin},
+		{"create video", "POST /api/videos", "/api/videos", srv.handlerVideoMetaCreate},
 	}
 	bodies := []struct {
 		name string
@@ -217,8 +217,8 @@ func TestJSONBodyErrors(t *testing.T) {
 }
 
 func TestCreateVideoValidation(t *testing.T) {
-	cfg := newTestConfig(t)
-	_, token := newTestUser(t, cfg, "owner@example.com")
+	srv := newTestServer(t)
+	_, token := newTestUser(t, srv, "owner@example.com")
 
 	cases := []struct {
 		name, title, description string
@@ -238,7 +238,7 @@ func TestCreateVideoValidation(t *testing.T) {
 			body, _ := json.Marshal(map[string]string{"title": tc.title, "description": tc.description})
 			req := httptest.NewRequest("POST", "/api/videos", bytes.NewReader(body))
 			req.Header.Set("Authorization", "Bearer "+token)
-			rec := serve("POST /api/videos", cfg.handlerVideoMetaCreate, req)
+			rec := serve("POST /api/videos", srv.handlerVideoMetaCreate, req)
 			if tc.want != http.StatusCreated {
 				assertJSONError(t, rec, tc.want)
 				return
@@ -259,15 +259,15 @@ func TestCreateVideoValidation(t *testing.T) {
 
 // A file that sniffs as MP4 but isn't playable is the client's problem.
 func TestVideoUploadRejectsUnplayableVideo(t *testing.T) {
-	cfg := newTestConfig(t)
-	cfg.processor = &media.Fake{ProbeErr: fmt.Errorf("%w: moov atom not found", media.ErrInvalidMedia)}
-	owner, token := newTestUser(t, cfg, "owner@example.com")
-	video := newTestVideo(t, cfg, owner)
+	srv := newTestServer(t)
+	srv.processor = &media.Fake{ProbeErr: fmt.Errorf("%w: moov atom not found", media.ErrInvalidMedia)}
+	owner, token := newTestUser(t, srv, "owner@example.com")
+	video := newTestVideo(t, srv, owner)
 
 	mp4 := []byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
 	body, ctype := multipartBody(t, "video", "video/mp4", mp4)
 	req := httptest.NewRequest("POST", "/api/video_upload/"+video.ID.String(), body)
 	req.Header.Set("Content-Type", ctype)
 	req.Header.Set("Authorization", "Bearer "+token)
-	assertJSONError(t, serve("POST /api/video_upload/{videoID}", cfg.handlerUploadVideo, req), http.StatusUnprocessableEntity)
+	assertJSONError(t, serve("POST /api/video_upload/{videoID}", srv.handlerUploadVideo, req), http.StatusUnprocessableEntity)
 }

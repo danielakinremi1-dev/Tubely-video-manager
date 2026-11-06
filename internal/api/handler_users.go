@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 )
 
-func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerUsersCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
@@ -29,7 +29,7 @@ func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user, err := cfg.db.CreateUser(database.CreateUserParams{
+	user, err := s.db.CreateUser(database.CreateUserParams{
 		Email:    params.Email,
 		Password: hashedPassword,
 	})

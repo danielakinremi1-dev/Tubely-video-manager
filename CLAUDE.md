@@ -8,7 +8,7 @@ If a `notes/` directory exists locally, read it for maintainer context. It is gi
 
 - Go (version in `go.mod`), standard-library `net/http` with method-pattern routing (`mux.HandleFunc("POST /api/...")`)
 - SQLite through `mattn/go-sqlite3`, which needs cgo. The schema is managed by goose migrations that run automatically on startup (`internal/database/migrate.go`).
-- `aws-sdk-go-v2` for S3. Locally, `docker compose` runs `adobe/s3mock` on :9090 (path-style, no auth). On AWS, media is served through CloudFront. The DB stores object **keys**; public URLs are built at response time from `MEDIA_BASE_URL` (`withMediaURLs` in `media_url.go`).
+- `aws-sdk-go-v2` for S3. Locally, `docker compose` runs `adobe/s3mock` on :9090 (path-style, no auth). On AWS, media is served through CloudFront. The DB stores object **keys**; public URLs are built at response time from `MEDIA_BASE_URL` (`withMediaURLs` in `internal/api/media_url.go`).
 - `ffmpeg` and `ffprobe` must be on PATH. They handle fast-start remuxing and aspect-ratio detection.
 - Frontend: vanilla JS, HTML and CSS in `app/`, served at `/app/`. There is no build step.
 - Auth: argon2id password hashes, 1h JWT access tokens, and refresh tokens stored in the DB (`internal/auth`). The UI refreshes access tokens through `authFetch` in `app/app.js`.
@@ -18,7 +18,7 @@ If a `notes/` directory exists locally, read it for maintainer context. It is gi
 ```bash
 cp .env.example .env        # local defaults work as-is with the emulator
 make up                     # docker compose up -d (S3 emulator on :9090)
-go run .                    # serves http://localhost:$PORT/app/  (or: make dev)
+go run ./cmd/tubely         # serves http://localhost:$PORT/app/  (or: make dev)
 make check                  # go build ./... && go vet ./... && go test ./...
 make test-integration       # also run S3 tests against the emulator (starts it)
 make down                   # stop services; `docker compose down -v` wipes uploads
@@ -29,18 +29,20 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 
 ## Layout
 
-- `main.go`: env/config loading, the `apiConfig` struct, routes
-- `handler_*.go`: one file per resource. Handlers are methods on `*apiConfig`.
-- `helper_functions_upload.go`: content-type sniffing, upload form errors, file extensions, object key generation
-- `internal/media`: the `Processor` interface (`Probe`, `FastStart`), the `FFmpeg` implementation (timeouts, stderr in errors), `ClassifyAspectRatio` and a `Fake` for tests
+- `cmd/tubely/main.go`: reads config from env (`config.go` resolves `MEDIA_BASE_URL`), builds the dependencies, starts the server
+- `internal/api`: the HTTP layer. `server.go` has `Config`, `NewServer` and the routes; handlers are methods on `*Server`.
+  - `handler_*.go`: one file per resource
+  - `upload_helpers.go`: content-type sniffing, upload form errors, file extensions, object key generation
+  - `objects.go`: `deleteObject` / `replaceObject`, which log failures and don't return them
+  - `media_url.go`: key → public URL (`withMediaURLs`)
+  - `json.go`: `respondWithJSON` / `respondWithError` / `decodeJSON`. Use these for every response.
+  - `handlers_test.go`: the `httptest` harness (`newTestServer`, `serve`, `assertJSONError`), using `storage.Memory` and `media.Fake`
 - `internal/storage`: the `Store` interface for media objects, the S3 implementation (endpoint, path-style, multipart via the transfer manager) and an in-memory `Memory` store for tests
-- `objects.go`: `deleteObject` / `replaceObject`, which log failures and don't return them
-- `media_url.go`: `MEDIA_BASE_URL` resolution and key → URL building
-- `docker-compose.yml`, `Makefile`: local services and shortcuts
-- `json.go`: `respondWithJSON` / `respondWithError`. Use these for every response.
+- `internal/media`: the `Processor` interface (`Probe`, `FastStart`), the `FFmpeg` implementation (timeouts, stderr in errors), `ClassifyAspectRatio` and a `Fake` for tests
 - `internal/database`: SQL by hand, with no ORM. Lookups return `database.ErrNotFound` when a row is missing.
 - `internal/database/migrations/`: numbered goose SQL migrations (`NNNNN_name.sql`), embedded in the binary. Never edit one that has shipped; add a new one.
 - `internal/auth`: JWT, refresh tokens, password hashing, bearer header parsing
+- `docker-compose.yml`, `Makefile`: local services and shortcuts
 - `app/`: frontend
 - `docs/`: public docs (`ROADMAP.md`)
 
@@ -48,8 +50,9 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 
 - Every protected handler follows the same steps: parse the path ID, call `auth.GetBearerToken`, call `auth.ValidateJWT`, load the record (`ErrNotFound` → 404), check ownership (→ 403).
 - Errors go through `respondWithError(w, status, msg, err)`. Don't write raw `http.Error` calls.
-- New config comes from env vars read in `main.go`, with a matching entry in `.env.example`. Optional vars need a sensible default. Don't make them `log.Fatal` when unset.
+- New config comes from env vars read in `cmd/tubely/main.go` and passed in through `api.Config`, with a matching entry in `.env.example`. Optional vars need a sensible default. Don't make them `log.Fatal` when unset.
 - The module path is `github.com/danielakinremi1-dev/tubely`.
+- Handlers reach S3 and ffmpeg only through `storage.Store` and `media.Processor`. Never import the AWS SDK or `os/exec` in `internal/api`.
 - Match the existing style: small files, early returns, no extra frameworks.
 
 ## AWS and cost rules (important)

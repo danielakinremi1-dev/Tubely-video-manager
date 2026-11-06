@@ -44,7 +44,7 @@ An upload works like this:
 
 | Piece | Locally (today) | On AWS |
 |---|---|---|
-| API and web UI | `go run .` on your machine | Not deployed yet |
+| API and web UI | `go run ./cmd/tubely` on your machine | Not deployed yet |
 | Database | SQLite file (`DB_PATH`) | Not deployed yet |
 | Media storage | [S3Mock](https://github.com/adobe/S3Mock) in Docker on `:9090` | S3 bucket behind CloudFront, managed by Terraform in [Phase 3](docs/ROADMAP.md) |
 
@@ -142,19 +142,17 @@ The tests cover:
 ## Project layout
 
 ```
-main.go                   config from env, wiring, routes
-handler_*.go              HTTP handlers, one file per resource
-helper_functions_upload.go  type sniffing, upload form errors, object keys
-objects.go                object cleanup after deletes and re-uploads
-media_url.go              object key → public URL
-json.go                   JSON responses and request decoding
-internal/auth             JWTs, refresh tokens, password hashing
-internal/database         hand-written SQL and goose migrations
-internal/storage          Store interface: S3 (multipart) and in-memory
-internal/media            Processor interface: ffprobe/ffmpeg and a test fake
+cmd/tubely/               main: config from env, wiring, server start
+internal/api/             HTTP layer: routes, handlers, upload validation, JSON helpers
+internal/storage/         Store interface: S3 (multipart) and in-memory
+internal/media/           Processor interface: ffprobe/ffmpeg and a test fake
+internal/database/        hand-written SQL and goose migrations
+internal/auth/            JWTs, refresh tokens, password hashing
 app/                      web UI (vanilla JS, no build step)
 docs/ROADMAP.md           phased plan and progress
 ```
+
+The API layer depends only on the `storage.Store` and `media.Processor` interfaces. `cmd/tubely` plugs in S3 and FFmpeg; tests plug in an in-memory store and a fake processor.
 
 ## Status
 

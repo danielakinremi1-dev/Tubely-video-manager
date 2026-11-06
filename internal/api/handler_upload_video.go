@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"errors"
@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	const uploadLimit = 1 << 30
 	r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
 
@@ -29,13 +29,13 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	userID, err := auth.ValidateJWT(token, s.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
 		return
 	}
 
-	videoMetadata, err := cfg.db.GetVideo(videoID)
+	videoMetadata, err := s.db.GetVideo(videoID)
 	if errors.Is(err, database.ErrNotFound) {
 		respondWithError(w, http.StatusNotFound, "Video not found", err)
 		return
@@ -81,7 +81,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// Probe first: it's cheap, and it rejects files that aren't playable
 	// video before the remux spends time on them.
-	info, err := cfg.processor.Probe(r.Context(), tmp.Name())
+	info, err := s.processor.Probe(r.Context(), tmp.Name())
 	if errors.Is(err, media.ErrInvalidMedia) {
 		respondWithError(w, http.StatusUnprocessableEntity, "File is not a playable video", err)
 		return
@@ -90,7 +90,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tmpProcessed, err := cfg.processor.FastStart(r.Context(), tmp.Name())
+	tmpProcessed, err := s.processor.FastStart(r.Context(), tmp.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to process video for fast start encoding", err)
 		return
@@ -108,7 +108,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// A cancelled request (client gone) aborts the upload, and neither a
 	// failed PutObject nor an aborted multipart upload leaves an object.
-	err = cfg.store.Put(r.Context(), fileKey, mediaType, tmpProcessedFile)
+	err = s.store.Put(r.Context(), fileKey, mediaType, tmpProcessedFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload video data to server", err)
 		return
@@ -117,9 +117,9 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	oldKey := videoMetadata.VideoKey
 	videoMetadata.VideoKey = &fileKey
 
-	updated, err := cfg.db.UpdateVideo(videoMetadata)
+	updated, err := s.db.UpdateVideo(videoMetadata)
 	if err != nil {
-		cfg.deleteObject(r.Context(), &fileKey) // don't orphan the new upload
+		s.deleteObject(r.Context(), &fileKey) // don't orphan the new upload
 		if errors.Is(err, database.ErrNotFound) {
 			respondWithError(w, http.StatusNotFound, "Video was deleted during upload", err)
 			return
@@ -127,9 +127,9 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Unable to update database video data", err)
 		return
 	}
-	cfg.replaceObject(r.Context(), oldKey, fileKey)
+	s.replaceObject(r.Context(), oldKey, fileKey)
 
-	respondWithJSON(w, http.StatusOK, cfg.withMediaURLs(updated))
+	respondWithJSON(w, http.StatusOK, s.withMediaURLs(updated))
 }
 
 // keyPrefix files videos under their shape: landscape/, portrait/ or other/.

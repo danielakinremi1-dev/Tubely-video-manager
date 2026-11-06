@@ -7,23 +7,13 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/danielakinremi1-dev/tubely/internal/api"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
 	"github.com/danielakinremi1-dev/tubely/internal/media"
 	"github.com/danielakinremi1-dev/tubely/internal/storage"
 
 	"github.com/joho/godotenv"
 )
-
-type apiConfig struct {
-	db           database.Client
-	jwtSecret    string
-	platform     string
-	filepathRoot string
-	mediaBaseURL string
-	port         string
-	store        storage.Store
-	processor    media.Processor
-}
 
 func main() {
 	godotenv.Load(".env")
@@ -96,39 +86,17 @@ func main() {
 		log.Fatalf("Couldn't setup AWS configuration: %v", err)
 	}
 
-	cfg := apiConfig{
-		db:           db,
-		jwtSecret:    jwtSecret,
-		platform:     platform,
-		filepathRoot: filepathRoot,
-		mediaBaseURL: mediaBaseURL,
-		store:        store,
-		processor:    media.FFmpeg{},
-		port:         port,
-	}
-
-	mux := http.NewServeMux()
-	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
-	mux.Handle("/app/", appHandler)
-
-	mux.HandleFunc("POST /api/login", cfg.handlerLogin)
-	mux.HandleFunc("POST /api/refresh", cfg.handlerRefresh)
-	mux.HandleFunc("POST /api/revoke", cfg.handlerRevoke)
-
-	mux.HandleFunc("POST /api/users", cfg.handlerUsersCreate)
-
-	mux.HandleFunc("POST /api/videos", cfg.handlerVideoMetaCreate)
-	mux.HandleFunc("POST /api/thumbnail_upload/{videoID}", cfg.handlerUploadThumbnail)
-	mux.HandleFunc("POST /api/video_upload/{videoID}", cfg.handlerUploadVideo)
-	mux.HandleFunc("GET /api/videos", cfg.handlerVideosRetrieve)
-	mux.HandleFunc("GET /api/videos/{videoID}", cfg.handlerVideoGet)
-	mux.HandleFunc("DELETE /api/videos/{videoID}", cfg.handlerVideoMetaDelete)
-
-	mux.HandleFunc("POST /admin/reset", cfg.handlerReset)
-
 	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: mux,
+		Addr: ":" + port,
+		Handler: api.NewServer(api.Config{
+			DB:           db,
+			Store:        store,
+			Processor:    media.FFmpeg{},
+			JWTSecret:    jwtSecret,
+			Platform:     platform,
+			FilepathRoot: filepathRoot,
+			MediaBaseURL: mediaBaseURL,
+		}).Handler(),
 	}
 
 	log.Printf("Serving on: http://localhost:%s/app/\n", port)
