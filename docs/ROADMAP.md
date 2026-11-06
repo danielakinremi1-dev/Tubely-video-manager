@@ -116,7 +116,7 @@ Everything here is written and validated offline (`terraform fmt` / `validate` n
 - [x] CloudFront with Origin Access Control, `PriceClass_100` and HTTPS only; the bucket policy lets only that distribution read
 - [x] Least-privilege app role: `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on `bucket/*` only, assumed for temporary credentials (no long-lived keys). The app never reads objects; CloudFront does.
 - [x] AWS Budgets alert ($1 actual, $5 forecast), included in the first apply
-- [ ] `docs/AWS_DEMO.md` runbook, an `ENV_FILE` setting, `make aws-up` (apply, then write `.env.aws`), `make dev-aws`, and `make aws-down` (destroy, then check that nothing tagged `Project=tubely` is left)
+- [x] `docs/AWS_DEMO.md` runbook, an `ENV_FILE` setting, `make aws-up` (apply, then write `.env.aws`), `make dev-aws`, and `make aws-down` (destroy, then check that nothing tagged `Project=tubely` is left)
 
 **Done when:** `make aws-up` → upload and play a video → `make aws-down` works end to end.
 

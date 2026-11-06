@@ -22,6 +22,7 @@ go run ./cmd/tubely         # serves http://localhost:$PORT/app/  (or: make dev)
 make check                  # go build ./... && go vet ./... && go test ./...
 make lint                   # golangci-lint v2 (.golangci.yml); local binary, else the pinned Docker image
 make tf-fmt tf-validate     # offline Terraform checks for infra/ (no AWS credentials needed)
+make aws-up / dev-aws / smoke-aws / aws-down   # AWS demo stack (docs/AWS_DEMO.md). Calls real AWS: only with the user's explicit OK
 make test-integration       # also run S3 tests against the emulator (starts it)
 make up-app                 # build and run the API in Docker too (compose profile "app")
 make smoke                  # scripts/smoke.sh end-to-end check against make up-app
@@ -50,7 +51,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 - `scripts/smoke.sh`: end-to-end HTTP check of a running server; run it after changes to the upload path
 - `app/`: frontend
 - `infra/`: Terraform for the AWS demo stack (local state, git-ignored; `.terraform.lock.hcl` is committed)
-- `docs/`: public docs (`ROADMAP.md`)
+- `docs/`: public docs (`ROADMAP.md`, `AWS_DEMO.md`)
 
 ## Conventions
 

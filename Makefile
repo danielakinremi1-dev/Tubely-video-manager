@@ -1,4 +1,4 @@
-.PHONY: up up-app down dev test test-integration smoke lint check tf-fmt tf-validate tf-lock
+.PHONY: up up-app down dev test test-integration smoke lint check tf-fmt tf-validate tf-lock aws-up dev-aws smoke-aws aws-down
 
 GOLANGCI_LINT_VERSION := v2.15.0
 TERRAFORM_VERSION := 1.17.1
@@ -45,6 +45,20 @@ tf-validate: ## Validate the Terraform configuration (offline, no AWS credential
 
 tf-lock: ## Record provider checksums for Linux and macOS in .terraform.lock.hcl
 	$(TERRAFORM) $(TF_DIR) providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_amd64 -platform=darwin_arm64
+
+aws-up: ## Create the AWS demo stack (asks before applying) and write .env.aws
+	scripts/aws-up.sh
+
+dev-aws: ## Run the server against the AWS demo stack
+	@test -f .env.aws || { echo "No .env.aws: run make aws-up first" >&2; exit 1; }
+	ENV_FILE=.env.aws go run ./cmd/tubely
+
+smoke-aws: ## End-to-end check against make dev-aws (bucket audited with your AWS credentials)
+	@test -f .env.aws || { echo "No .env.aws: run make aws-up first" >&2; exit 1; }
+	set -a && . ./.env.aws && set +a && SMOKE_AWS=1 scripts/smoke.sh
+
+aws-down: ## Destroy the AWS demo stack (asks first), then verify nothing is left
+	scripts/aws-down.sh
 
 check: ## Build, vet and test
 	go build ./... && go vet ./... && go test ./...
