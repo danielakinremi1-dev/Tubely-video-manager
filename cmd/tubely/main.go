@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	"github.com/danielakinremi1-dev/tubely/internal/api"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
@@ -95,6 +98,26 @@ func main() {
 		MediaBaseURL: mediaBaseURL,
 	}).HTTPServer(":" + port)
 
+	ln, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		log.Fatalf("Couldn't listen on %s: %v", srv.Addr, err)
+	}
+
+	// The first SIGINT (Ctrl-C) or SIGTERM (docker stop) starts a graceful
+	// shutdown; stop() restores the default, so a second Ctrl-C exits now.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+
 	log.Printf("Serving on: http://localhost:%s/app/\n", port)
-	log.Fatal(srv.ListenAndServe())
+	if err := serve(ctx, srv, ln, shutdownTimeout, abortGrace); err != nil {
+		log.Printf("Server stopped with error: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		log.Printf("Couldn't close database: %v", err)
+	}
+	log.Print("Stopped")
 }
