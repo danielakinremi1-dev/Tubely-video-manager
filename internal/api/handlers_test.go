@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -30,13 +31,15 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("NewClient: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return &Server{
-		db:           db,
-		jwtSecret:    "test-secret",
-		mediaBaseURL: "http://media.test",
-		store:        storage.NewMemory(),
-		processor:    &media.Fake{Info: media.Info{Width: 1280, Height: 720}},
-	}
+	return NewServer(Config{
+		DB:           db,
+		Store:        storage.NewMemory(),
+		Processor:    &media.Fake{Info: media.Info{Width: 1280, Height: 720}},
+		JWTSecret:    "test-secret",
+		MediaBaseURL: "http://media.test",
+		// Keep test output quiet; tests that check logs swap in a buffer.
+		Logger: slog.New(slog.DiscardHandler),
+	})
 }
 
 // newTestUser creates a user and returns its ID and a valid access token.

@@ -4,6 +4,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -25,6 +26,8 @@ type Config struct {
 	FilepathRoot string
 	// MediaBaseURL is the public URL that object keys are served under.
 	MediaBaseURL string
+	// Logger receives request logs. It defaults to slog.Default().
+	Logger *slog.Logger
 }
 
 // Server-wide timeouts bound how long a slow or stalled client can hold a
@@ -51,9 +54,14 @@ type Server struct {
 	platform     string
 	filepathRoot string
 	mediaBaseURL string
+	logger       *slog.Logger
 }
 
 func NewServer(c Config) *Server {
+	logger := c.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &Server{
 		db:           c.DB,
 		store:        c.Store,
@@ -62,6 +70,7 @@ func NewServer(c Config) *Server {
 		platform:     c.Platform,
 		filepathRoot: c.FilepathRoot,
 		mediaBaseURL: c.MediaBaseURL,
+		logger:       logger,
 	}
 }
 
@@ -77,7 +86,8 @@ func (s *Server) HTTPServer(addr string) *http.Server {
 	}
 }
 
-// Handler returns the router with every route registered.
+// Handler returns the router with every route registered, wrapped in the
+// request ID, access log and panic recovery middleware.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir(s.filepathRoot))))
@@ -96,5 +106,5 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/videos/{videoID}", s.requireAuth(s.handlerVideoMetaDelete))
 
 	mux.HandleFunc("POST /admin/reset", s.handlerReset)
-	return mux
+	return s.withMiddleware(mux)
 }

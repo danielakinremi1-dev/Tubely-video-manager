@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"log"
 )
 
 // deleteObject removes an object from media storage. It's used for cleanup
@@ -16,7 +15,7 @@ func (s *Server) deleteObject(ctx context.Context, key *string) {
 		return
 	}
 	if err := s.store.Delete(context.WithoutCancel(ctx), *key); err != nil {
-		log.Printf("couldn't delete object %q: %v", *key, err)
+		logFrom(ctx).Warn("couldn't delete object; it is now orphaned", "key", *key, "error", err)
 	}
 }
 

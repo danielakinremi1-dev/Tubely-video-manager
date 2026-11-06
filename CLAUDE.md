@@ -49,7 +49,8 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 ## Conventions
 
 - Protected routes are wrapped in `s.requireAuth(...)` in `server.go` (401 without a valid token); handlers read the caller with `userIDFrom(r.Context())`. Handlers for one video call `s.loadOwnedVideo(w, r)`, which handles bad IDs (400), missing rows (404) and other owners (403). Videos are private to their owner.
-- Errors go through `respondWithError(w, status, msg, err)`. Don't write raw `http.Error` calls.
+- Errors go through `respondWithError(w, status, msg, err)`. Don't write raw `http.Error` calls. `msg` goes to the client; `err` is attached to the request's access-log line.
+- Log with `log/slog`. Inside a request, use `logFrom(ctx)` so lines carry the request ID. Every request already gets one access-log line, so don't add per-handler "request done" logs.
 - New config comes from env vars read in `cmd/tubely/main.go` and passed in through `api.Config`, with a matching entry in `.env.example`. Optional vars need a sensible default. Don't make them `log.Fatal` when unset.
 - The module path is `github.com/danielakinremi1-dev/tubely`.
 - Handlers reach S3 and ffmpeg only through `storage.Store` and `media.Processor`. Never import the AWS SDK or `os/exec` in `internal/api`.

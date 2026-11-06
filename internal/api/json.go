@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -27,12 +27,14 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
+// respondWithError writes {"error": msg}. err is the underlying cause: it
+// isn't sent to the client, but it's attached to the request's access log
+// line.
 func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
-	if err != nil {
-		log.Println(err)
-	}
-	if code > 499 {
-		log.Printf("Responding with 5XX error: %s", msg)
+	if n, ok := w.(interface{ noteError(error) }); ok && err != nil {
+		n.noteError(err)
+	} else if err != nil {
+		slog.Warn("error response", "status", code, "error", err)
 	}
 	type errorResponse struct {
 		Error string `json:"error"`
@@ -46,7 +48,7 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
+		slog.Error("couldn't marshal JSON response", "error", err)
 		w.WriteHeader(500)
 		return
 	}

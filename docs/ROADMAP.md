@@ -97,7 +97,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 **Operations**
 - [x] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
 - [x] Graceful shutdown on SIGINT/SIGTERM
-- [ ] `log/slog` structured logging, request-ID middleware and panic recovery
+- [x] `log/slog` structured logging, request-ID middleware and panic recovery
 - [ ] Startup check that ffmpeg/ffprobe are on PATH, plus `GET /api/healthz`
 
 **Tests and packaging**

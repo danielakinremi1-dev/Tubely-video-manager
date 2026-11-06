@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -19,6 +20,15 @@ import (
 
 func main() {
 	godotenv.Load(".env")
+
+	// Human-readable logs in development; JSON (one object per line, easy to
+	// search and ship to a log service) everywhere else. SetDefault also
+	// routes the standard log package (log.Fatal below) through slog.
+	var logHandler slog.Handler = slog.NewJSONHandler(os.Stderr, nil)
+	if os.Getenv("PLATFORM") == "dev" {
+		logHandler = slog.NewTextHandler(os.Stderr, nil)
+	}
+	slog.SetDefault(slog.New(logHandler))
 
 	pathToDB := os.Getenv("DB_PATH")
 	if pathToDB == "" {
@@ -112,12 +122,12 @@ func main() {
 		stop()
 	}()
 
-	log.Printf("Serving on: http://localhost:%s/app/\n", port)
+	slog.Info("serving", "url", "http://localhost:"+port+"/app/")
 	if err := serve(ctx, srv, ln, shutdownTimeout, abortGrace); err != nil {
-		log.Printf("Server stopped with error: %v", err)
+		slog.Error("server stopped with an error", "error", err)
 	}
 	if err := db.Close(); err != nil {
-		log.Printf("Couldn't close database: %v", err)
+		slog.Error("couldn't close database", "error", err)
 	}
-	log.Print("Stopped")
+	slog.Info("stopped")
 }

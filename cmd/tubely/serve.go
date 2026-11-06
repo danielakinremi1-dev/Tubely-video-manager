@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -38,12 +38,12 @@ func serve(ctx context.Context, srv *http.Server, ln net.Listener, drain, grace 
 	case <-ctx.Done():
 	}
 
-	log.Printf("shutting down: waiting up to %s for in-flight requests", drain)
+	slog.Info("shutting down: waiting for in-flight requests", "timeout", drain.String())
 	drainCtx, cancel := context.WithTimeout(context.Background(), drain)
 	defer cancel()
 	err := srv.Shutdown(drainCtx)
 	if errors.Is(err, context.DeadlineExceeded) {
-		log.Printf("requests still running after %s; cancelling them", drain)
+		slog.Warn("requests still running; cancelling them", "after", drain.String())
 		cancelRequests()
 		graceCtx, cancel := context.WithTimeout(context.Background(), grace)
 		defer cancel()
