@@ -145,11 +145,12 @@ The tests cover:
 main.go                   config from env, wiring, routes
 handler_*.go              HTTP handlers, one file per resource
 helper_functions_upload.go  ffmpeg/ffprobe, type sniffing, object keys
-s3_client.go              S3 client, transfer manager, object cleanup
+objects.go                object cleanup after deletes and re-uploads
 media_url.go              object key → public URL
 json.go                   JSON responses and request decoding
 internal/auth             JWTs, refresh tokens, password hashing
 internal/database         hand-written SQL and goose migrations
+internal/storage          Store interface: S3 (multipart) and in-memory
 app/                      web UI (vanilla JS, no build step)
 docs/ROADMAP.md           phased plan and progress
 ```

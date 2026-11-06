@@ -7,10 +7,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
 	"github.com/danielakinremi1-dev/tubely/internal/database"
+	"github.com/danielakinremi1-dev/tubely/internal/storage"
 
 	"github.com/joho/godotenv"
 )
@@ -20,12 +18,9 @@ type apiConfig struct {
 	jwtSecret    string
 	platform     string
 	filepathRoot string
-	s3Bucket     string
-	s3Region     string
 	mediaBaseURL string
 	port         string
-	s3Client     *s3.Client
-	s3Uploader   *transfermanager.Client
+	store        storage.Store
 }
 
 func main() {
@@ -89,7 +84,12 @@ func main() {
 		}
 	}
 
-	s3Client, err := newS3Client(context.Background(), s3Region, s3Endpoint, s3ForcePathStyle)
+	store, err := storage.NewS3(context.Background(), storage.S3Config{
+		Bucket:         s3Bucket,
+		Region:         s3Region,
+		Endpoint:       s3Endpoint,
+		ForcePathStyle: s3ForcePathStyle,
+	})
 	if err != nil {
 		log.Fatalf("Couldn't setup AWS configuration: %v", err)
 	}
@@ -99,11 +99,8 @@ func main() {
 		jwtSecret:    jwtSecret,
 		platform:     platform,
 		filepathRoot: filepathRoot,
-		s3Bucket:     s3Bucket,
-		s3Region:     s3Region,
 		mediaBaseURL: mediaBaseURL,
-		s3Client:     s3Client,
-		s3Uploader:   newS3Uploader(s3Client, s3Endpoint != ""),
+		store:        store,
 		port:         port,
 	}
 

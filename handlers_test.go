@@ -16,11 +16,12 @@ import (
 
 	"github.com/danielakinremi1-dev/tubely/internal/auth"
 	"github.com/danielakinremi1-dev/tubely/internal/database"
+	"github.com/danielakinremi1-dev/tubely/internal/storage"
 	"github.com/google/uuid"
 )
 
-// newTestConfig returns an apiConfig backed by a throwaway SQLite file. It has
-// no S3 client, so it only suits tests that fail before storage is touched.
+// newTestConfig returns an apiConfig backed by a throwaway SQLite file and an
+// in-memory media store.
 func newTestConfig(t *testing.T) *apiConfig {
 	t.Helper()
 	db, err := database.NewClient(filepath.Join(t.TempDir(), "test.db"))
@@ -28,7 +29,12 @@ func newTestConfig(t *testing.T) *apiConfig {
 		t.Fatalf("NewClient: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return &apiConfig{db: db, jwtSecret: "test-secret", mediaBaseURL: "http://media.test"}
+	return &apiConfig{
+		db:           db,
+		jwtSecret:    "test-secret",
+		mediaBaseURL: "http://media.test",
+		store:        storage.NewMemory(),
+	}
 }
 
 // newTestUser creates a user and returns its ID and a valid access token.

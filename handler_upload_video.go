@@ -114,7 +114,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// A cancelled request (client gone) aborts the upload, and neither a
 	// failed PutObject nor an aborted multipart upload leaves an object.
-	err = cfg.putObject(r.Context(), fileKey, mediaType, tmpProcessedFile)
+	err = cfg.store.Put(r.Context(), fileKey, mediaType, tmpProcessedFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload video data to server", err)
 		return

@@ -72,7 +72,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	thumbnailKey := newObjectKey("thumbnails/", fileExtension)
 
-	err = cfg.putObject(r.Context(), thumbnailKey, mediaType, reqFile)
+	err = cfg.store.Put(r.Context(), thumbnailKey, mediaType, reqFile)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to upload thumbnail", err)
 		return

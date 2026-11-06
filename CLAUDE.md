@@ -32,7 +32,8 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 - `main.go`: env/config loading, the `apiConfig` struct, routes
 - `handler_*.go`: one file per resource. Handlers are methods on `*apiConfig`.
 - `helper_functions_upload.go`: ffmpeg/ffprobe helpers, file extensions, object key generation
-- `s3_client.go`: S3 client construction (endpoint/path-style) and object cleanup helpers
+- `internal/storage`: the `Store` interface for media objects, the S3 implementation (endpoint, path-style, multipart via the transfer manager) and an in-memory `Memory` store for tests
+- `objects.go`: `deleteObject` / `replaceObject`, which log failures and don't return them
 - `media_url.go`: `MEDIA_BASE_URL` resolution and key → URL building
 - `docker-compose.yml`, `Makefile`: local services and shortcuts
 - `json.go`: `respondWithJSON` / `respondWithError`. Use these for every response.

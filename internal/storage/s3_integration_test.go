@@ -1,4 +1,4 @@
-package main
+package storage
 
 import (
 	"bytes"
@@ -9,16 +9,17 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/google/uuid"
 )
 
 // Integration tests against a real S3-compatible server. They're skipped
 // unless TUBELY_TEST_S3_ENDPOINT is set, e.g. with the local emulator:
 //
 //	make up
-//	TUBELY_TEST_S3_ENDPOINT=http://localhost:9090 go test -run S3 .
+//	TUBELY_TEST_S3_ENDPOINT=http://localhost:9090 go test -run S3 ./internal/storage
 //
 // They use the bucket from TUBELY_TEST_S3_BUCKET (default "tubely-local").
-func newIntegrationConfig(t *testing.T) *apiConfig {
+func newIntegrationStore(t *testing.T) *S3 {
 	t.Helper()
 	endpoint := os.Getenv("TUBELY_TEST_S3_ENDPOINT")
 	if endpoint == "" {
@@ -33,15 +34,20 @@ func newIntegrationConfig(t *testing.T) *apiConfig {
 		t.Setenv("AWS_ACCESS_KEY_ID", "test")
 		t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
 	}
-	client, err := newS3Client(context.Background(), "us-east-1", endpoint, true)
+	store, err := NewS3(context.Background(), S3Config{
+		Bucket: bucket, Region: "us-east-1", Endpoint: endpoint, ForcePathStyle: true,
+	})
 	if err != nil {
-		t.Fatalf("newS3Client: %v", err)
+		t.Fatalf("NewS3: %v", err)
 	}
-	return &apiConfig{s3Client: client, s3Uploader: newS3Uploader(client, true), s3Bucket: bucket}
+	return store
 }
 
+// testKey returns a unique key under test/.
+func testKey() string { return "test/" + uuid.NewString() + ".mp4" }
+
 func TestS3PutObjectSingleAndMultipart(t *testing.T) {
-	cfg := newIntegrationConfig(t)
+	s := newIntegrationStore(t)
 	ctx := context.Background()
 
 	cases := []struct {
@@ -62,13 +68,13 @@ func TestS3PutObjectSingleAndMultipart(t *testing.T) {
 			f.Seek(0, io.SeekStart)
 			defer f.Close()
 
-			key := newObjectKey("test/", ".mp4")
-			if err := cfg.putObject(ctx, key, "video/mp4", f); err != nil {
-				t.Fatalf("putObject: %v", err)
+			key := testKey()
+			if err := s.Put(ctx, key, "video/mp4", f); err != nil {
+				t.Fatalf("Put: %v", err)
 			}
-			defer cfg.deleteObject(ctx, &key)
+			defer s.Delete(ctx, key)
 
-			out, err := cfg.s3Client.GetObject(ctx, &s3.GetObjectInput{Bucket: &cfg.s3Bucket, Key: &key})
+			out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: &s.bucket, Key: &key})
 			if err != nil {
 				t.Fatalf("GetObject: %v", err)
 			}
@@ -89,22 +95,22 @@ func TestS3PutObjectSingleAndMultipart(t *testing.T) {
 
 // A cancelled multipart upload must not leave an object or open upload behind.
 func TestS3CancelledMultipartLeavesNothing(t *testing.T) {
-	cfg := newIntegrationConfig(t)
-	key := newObjectKey("test/", ".mp4")
+	s := newIntegrationStore(t)
+	key := testKey()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	body := &cancelAfter{r: bytes.NewReader(make([]byte, 40<<20)), after: 20 << 20, cancel: cancel}
-	err := cfg.putObject(ctx, key, "video/mp4", body)
+	err := s.Put(ctx, key, "video/mp4", body)
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("putObject err = %v, want context.Canceled", err)
+		t.Fatalf("Put err = %v, want context.Canceled", err)
 	}
 
 	bg := context.Background()
-	if _, err := cfg.s3Client.HeadObject(bg, &s3.HeadObjectInput{Bucket: &cfg.s3Bucket, Key: &key}); err == nil {
+	if _, err := s.client.HeadObject(bg, &s3.HeadObjectInput{Bucket: &s.bucket, Key: &key}); err == nil {
 		t.Errorf("object %q exists after a cancelled upload", key)
-		cfg.deleteObject(bg, &key)
+		s.Delete(bg, key)
 	}
-	ups, err := cfg.s3Client.ListMultipartUploads(bg, &s3.ListMultipartUploadsInput{Bucket: &cfg.s3Bucket, Prefix: &key})
+	ups, err := s.client.ListMultipartUploads(bg, &s3.ListMultipartUploadsInput{Bucket: &s.bucket, Prefix: &key})
 	if err != nil {
 		t.Fatalf("ListMultipartUploads: %v", err)
 	}
