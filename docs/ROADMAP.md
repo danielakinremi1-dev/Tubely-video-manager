@@ -103,7 +103,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 **Tests and packaging**
 - [x] Unit tests: `getExtension`, the aspect-ratio classifier and the auth helpers
 - [x] Handler tests with `httptest` and the fake storage/media implementations
-- [ ] Small sample MP4s in `testdata/` for the ffprobe tests
+- [x] Small sample MP4s in `testdata/` for the ffprobe tests
 - [ ] Multi-stage `Dockerfile` with ffmpeg, an `app` service in compose, and `scripts/smoke.sh` (the end-to-end upload check)
 - [ ] `make lint` (golangci-lint)
 

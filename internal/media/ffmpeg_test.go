@@ -1,6 +1,7 @@
 package media
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -11,52 +12,39 @@ import (
 	"time"
 )
 
-func TestFFmpegProbe(t *testing.T) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not on PATH")
-	}
-	dir := t.TempDir()
+// Sample media in testdata/ (a few KB each, generated once with ffmpeg's
+// testsrc and sine sources). The MP4s are not fast-start: moov comes after
+// mdat, as most cameras and encoders write it.
+func sample(name string) string { return filepath.Join("testdata", name) }
 
-	gen := func(t *testing.T, name string, args ...string) string {
-		t.Helper()
-		out := filepath.Join(dir, name)
-		cmd := exec.Command("ffmpeg", append(append([]string{"-v", "error", "-y"}, args...), out)...)
-		if b, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("ffmpeg %s: %v: %s", name, err, b)
-		}
-		return out
+func requireTool(t *testing.T, name string) {
+	t.Helper()
+	if _, err := exec.LookPath(name); err != nil {
+		t.Skipf("%s not on PATH", name)
 	}
-	video := func(t *testing.T, name, size string) string {
-		return gen(t, name, "-f", "lavfi", "-i", "testsrc=duration=0.2:size="+size+":rate=10", "-pix_fmt", "yuv420p")
+}
+
+func TestFFmpegProbe(t *testing.T) {
+	requireTool(t, "ffprobe")
+	notMedia := filepath.Join(t.TempDir(), "x.mp4")
+	if err := os.WriteFile(notMedia, []byte("definitely not a video"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 
 	tests := []struct {
-		name    string
-		file    func(t *testing.T) string
-		want    string
-		wantErr bool
+		name, path string
+		want       Info
+		wantErr    bool
 	}{
-		{"landscape", func(t *testing.T) string { return video(t, "l.mp4", "1280x720") }, "16:9", false},
-		{"portrait", func(t *testing.T) string { return video(t, "p.mp4", "720x1280") }, "9:16", false},
-		{"other", func(t *testing.T) string { return video(t, "o.mp4", "640x480") }, "other", false},
-		{"audio only", func(t *testing.T) string {
-			return gen(t, "a.m4a", "-f", "lavfi", "-i", "sine=duration=0.2")
-		}, "", true},
-		{"not media", func(t *testing.T) string {
-			p := filepath.Join(dir, "x.mp4")
-			if err := os.WriteFile(p, []byte("definitely not a video"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			return p
-		}, "", true},
+		{"landscape", sample("landscape.mp4"), Info{320, 180}, false},
+		{"portrait", sample("portrait.mp4"), Info{180, 320}, false},
+		{"other", sample("other.mp4"), Info{240, 180}, false},
+		{"audio only", sample("audio-only.m4a"), Info{}, true},
+		{"not media", notMedia, Info{}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info, err := FFmpeg{}.Probe(context.Background(), tt.file(t))
-			got := ""
-			if err == nil {
-				got = info.AspectRatio()
-			}
+			got, err := FFmpeg{}.Probe(context.Background(), tt.path)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -64,7 +52,7 @@ func TestFFmpegProbe(t *testing.T) {
 				t.Errorf("err = %v, want it to wrap ErrInvalidMedia", err)
 			}
 			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
+				t.Errorf("Info = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -91,15 +79,25 @@ func TestRunToolTimeoutAndStderr(t *testing.T) {
 }
 
 func TestFFmpegFastStart(t *testing.T) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not on PATH")
+	requireTool(t, "ffmpeg")
+	moovBeforeMdat := func(data []byte) bool {
+		moov, mdat := bytes.Index(data, []byte("moov")), bytes.Index(data, []byte("mdat"))
+		return moov >= 0 && mdat >= 0 && moov < mdat
+	}
+
+	// Work on a copy: FastStart writes next to its input.
+	orig, err := os.ReadFile(sample("landscape.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moovBeforeMdat(orig) {
+		t.Fatal("testdata/landscape.mp4 is already fast-start; the test would prove nothing")
 	}
 	in := filepath.Join(t.TempDir(), "in.mp4")
-	cmd := exec.Command("ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
-		"testsrc=duration=0.2:size=320x180:rate=10", "-pix_fmt", "yuv420p", in)
-	if b, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("ffmpeg: %v: %s", err, b)
+	if err := os.WriteFile(in, orig, 0o644); err != nil {
+		t.Fatal(err)
 	}
+
 	out, err := FFmpeg{}.FastStart(context.Background(), in)
 	if err != nil {
 		t.Fatalf("FastStart: %v", err)
@@ -109,9 +107,11 @@ func TestFFmpegFastStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	moov, mdat := strings.Index(string(data), "moov"), strings.Index(string(data), "mdat")
-	if moov < 0 || mdat < 0 || moov > mdat {
-		t.Errorf("moov at %d, mdat at %d: want moov first", moov, mdat)
+	if !moovBeforeMdat(data) {
+		t.Error("output isn't fast-start: moov should come before mdat")
+	}
+	if info, err := (FFmpeg{}).Probe(context.Background(), out); err != nil || info != (Info{320, 180}) {
+		t.Errorf("remuxed file probes as %+v, %v", info, err)
 	}
 
 	bad := filepath.Join(t.TempDir(), "bad.mp4")
