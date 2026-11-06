@@ -98,7 +98,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [x] `http.Server` timeouts, with longer deadlines for the upload routes (`http.ResponseController`)
 - [x] Graceful shutdown on SIGINT/SIGTERM
 - [x] `log/slog` structured logging, request-ID middleware and panic recovery
-- [ ] Startup check that ffmpeg/ffprobe are on PATH, plus `GET /api/healthz`
+- [x] Startup check that ffmpeg/ffprobe are on PATH, plus `GET /api/healthz`
 
 **Tests and packaging**
 - [ ] Unit tests: `getExtension`, the aspect-ratio classifier and the auth helpers

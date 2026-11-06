@@ -333,3 +333,14 @@ func TestVideoAccessControl(t *testing.T) {
 		}
 	}
 }
+
+func TestHealthz(t *testing.T) {
+	srv := newTestServer(t)
+	rec := serve(srv, httptest.NewRequest("GET", "/api/healthz", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok"`) {
+		t.Errorf("healthy: %d %s", rec.Code, rec.Body)
+	}
+
+	srv.db.Close()
+	assertJSONError(t, serve(srv, httptest.NewRequest("GET", "/api/healthz", nil)), http.StatusServiceUnavailable)
+}

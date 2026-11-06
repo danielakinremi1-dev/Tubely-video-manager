@@ -92,6 +92,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir(s.filepathRoot))))
 
+	mux.HandleFunc("GET /api/healthz", s.handlerHealthz)
+
 	mux.HandleFunc("POST /api/login", s.handlerLogin)
 	mux.HandleFunc("POST /api/refresh", s.handlerRefresh)
 	mux.HandleFunc("POST /api/revoke", s.handlerRevoke)

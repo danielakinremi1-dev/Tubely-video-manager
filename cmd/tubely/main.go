@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net"
 	"os"
@@ -22,58 +21,62 @@ func main() {
 	godotenv.Load(".env")
 
 	// Human-readable logs in development; JSON (one object per line, easy to
-	// search and ship to a log service) everywhere else. SetDefault also
-	// routes the standard log package (log.Fatal below) through slog.
+	// search and ship to a log service) everywhere else.
 	var logHandler slog.Handler = slog.NewJSONHandler(os.Stderr, nil)
 	if os.Getenv("PLATFORM") == "dev" {
 		logHandler = slog.NewTextHandler(os.Stderr, nil)
 	}
 	slog.SetDefault(slog.New(logHandler))
 
+	processor := media.FFmpeg{}
+	if err := processor.CheckInstalled(); err != nil {
+		fatal(err.Error())
+	}
+
 	pathToDB := os.Getenv("DB_PATH")
 	if pathToDB == "" {
-		log.Fatal("DB_PATH must be set")
+		fatal("DB_PATH must be set")
 	}
 
 	db, err := database.NewClient(pathToDB)
 	if err != nil {
-		log.Fatalf("Couldn't connect to database: %v", err)
+		fatal("couldn't open database", "error", err)
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		log.Fatal("JWT_SECRET environment variable is not set")
+		fatal("JWT_SECRET environment variable is not set")
 	}
 
 	platform := os.Getenv("PLATFORM")
 	if platform == "" {
-		log.Fatal("PLATFORM environment variable is not set")
+		fatal("PLATFORM environment variable is not set")
 	}
 
 	filepathRoot := os.Getenv("FILEPATH_ROOT")
 	if filepathRoot == "" {
-		log.Fatal("FILEPATH_ROOT environment variable is not set")
+		fatal("FILEPATH_ROOT environment variable is not set")
 	}
 
 	s3Bucket := os.Getenv("S3_BUCKET")
 	if s3Bucket == "" {
-		log.Fatal("S3_BUCKET environment variable is not set")
+		fatal("S3_BUCKET environment variable is not set")
 	}
 
 	s3Region := os.Getenv("S3_REGION")
 	if s3Region == "" {
-		log.Fatal("S3_REGION environment variable is not set")
+		fatal("S3_REGION environment variable is not set")
 	}
 
 	// Public base URL that stored object keys are served from.
 	mediaBaseURL, err := resolveMediaBaseURL(os.Getenv("MEDIA_BASE_URL"), os.Getenv("S3_CF_DISTRO"))
 	if err != nil {
-		log.Fatal(err)
+		fatal(err.Error())
 	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		log.Fatal("PORT environment variable is not set")
+		fatal("PORT environment variable is not set")
 	}
 
 	// Optional: point at an S3-compatible endpoint (e.g. a local emulator).
@@ -84,7 +87,7 @@ func main() {
 	if v := os.Getenv("S3_FORCE_PATH_STYLE"); v != "" {
 		s3ForcePathStyle, err = strconv.ParseBool(v)
 		if err != nil {
-			log.Fatalf("S3_FORCE_PATH_STYLE must be a boolean: %v", err)
+			fatal("S3_FORCE_PATH_STYLE must be a boolean", "error", err)
 		}
 	}
 
@@ -95,13 +98,13 @@ func main() {
 		ForcePathStyle: s3ForcePathStyle,
 	})
 	if err != nil {
-		log.Fatalf("Couldn't setup AWS configuration: %v", err)
+		fatal("couldn't set up S3 storage", "error", err)
 	}
 
 	srv := api.NewServer(api.Config{
 		DB:           db,
 		Store:        store,
-		Processor:    media.FFmpeg{},
+		Processor:    processor,
 		JWTSecret:    jwtSecret,
 		Platform:     platform,
 		FilepathRoot: filepathRoot,
@@ -110,7 +113,7 @@ func main() {
 
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
-		log.Fatalf("Couldn't listen on %s: %v", srv.Addr, err)
+		fatal("couldn't listen", "addr", srv.Addr, "error", err)
 	}
 
 	// The first SIGINT (Ctrl-C) or SIGTERM (docker stop) starts a graceful
@@ -130,4 +133,10 @@ func main() {
 		slog.Error("couldn't close database", "error", err)
 	}
 	slog.Info("stopped")
+}
+
+// fatal logs a startup error and exits.
+func fatal(msg string, args ...any) {
+	slog.Error(msg, args...)
+	os.Exit(1)
 }

@@ -31,6 +31,11 @@ func NewClient(pathToDB string) (Client, error) {
 	return Client{db}, nil
 }
 
+// Ping checks that the database is reachable.
+func (c Client) Ping(ctx context.Context) error {
+	return c.db.PingContext(ctx)
+}
+
 // Close releases the underlying database handle.
 func (c Client) Close() error {
 	return c.db.Close()

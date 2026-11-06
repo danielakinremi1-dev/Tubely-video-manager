@@ -123,3 +123,16 @@ func TestFFmpegFastStart(t *testing.T) {
 		t.Error("failed FastStart left its output file behind")
 	}
 }
+
+func TestFFmpegCheckInstalled(t *testing.T) {
+	if _, err := exec.LookPath("ffprobe"); err == nil {
+		if err := (FFmpeg{}).CheckInstalled(); err != nil {
+			t.Errorf("CheckInstalled with tools on PATH: %v", err)
+		}
+	}
+	t.Setenv("PATH", t.TempDir())
+	err := FFmpeg{}.CheckInstalled()
+	if err == nil || !strings.Contains(err.Error(), "ffmpeg must be installed") {
+		t.Errorf("CheckInstalled with empty PATH: err = %v", err)
+	}
+}

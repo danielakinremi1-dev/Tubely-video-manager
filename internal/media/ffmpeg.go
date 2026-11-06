@@ -25,6 +25,17 @@ type FFmpeg struct{}
 
 var _ Processor = FFmpeg{}
 
+// CheckInstalled reports whether ffmpeg and ffprobe are on PATH. Call it at
+// startup: without them every video upload would fail with a 500.
+func (FFmpeg) CheckInstalled() error {
+	for _, tool := range []string{"ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			return fmt.Errorf("%s must be installed and on PATH: %w", tool, err)
+		}
+	}
+	return nil
+}
+
 func (FFmpeg) Probe(ctx context.Context, path string) (Info, error) {
 	out, err := runTool(ctx, ffprobeTimeout, "ffprobe", "-v", "error", "-select_streams", "v:0",
 		"-print_format", "json", "-show_streams", path)

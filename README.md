@@ -118,6 +118,7 @@ Protected routes need `Authorization: Bearer <access token>`. Errors look like `
 
 | Method and path | Auth | Description |
 |---|---|---|
+| `GET /api/healthz` | none | `{"status":"ok"}` when the database is reachable, else `503` |
 | `POST /api/users` | none | Sign up with `{"email", "password"}` → `201` |
 | `POST /api/login` | none | Returns the user plus `token` (access) and `refresh_token` |
 | `POST /api/refresh` | refresh token | Returns a new access token |
