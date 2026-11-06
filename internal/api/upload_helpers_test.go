@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/danielakinremi1-dev/tubely/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -49,5 +50,34 @@ func TestSniffMediaType(t *testing.T) {
 				t.Errorf("reader not rewound: at %d", pos)
 			}
 		})
+	}
+}
+
+func TestGetExtension(t *testing.T) {
+	tests := map[string]string{
+		"video/mp4":  ".mp4",
+		"image/png":  ".png",
+		"image/jpeg": ".jpeg",
+		"":           ".bin",
+		"video":      ".bin",
+		"a/b/c":      ".bin",
+	}
+	for in, want := range tests {
+		if got := getExtension(in); got != want {
+			t.Errorf("getExtension(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestKeyPrefix(t *testing.T) {
+	for ratio, want := range map[string]string{
+		media.Landscape: "landscape/",
+		media.Portrait:  "portrait/",
+		media.Other:     "other/",
+		"":              "other/",
+	} {
+		if got := keyPrefix(ratio); got != want {
+			t.Errorf("keyPrefix(%q) = %q, want %q", ratio, got, want)
+		}
 	}
 }

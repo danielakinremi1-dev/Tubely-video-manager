@@ -87,17 +87,20 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	return id, nil
 }
 
+// GetBearerToken returns the token from an "Authorization: Bearer <token>"
+// header. The scheme is case-insensitive (RFC 7235); the token must be a
+// single non-empty word.
 func GetBearerToken(headers http.Header) (string, error) {
-	authHeader := headers.Get("Authorization")
+	authHeader := strings.TrimSpace(headers.Get("Authorization"))
 	if authHeader == "" {
 		return "", ErrNoAuthHeaderIncluded
 	}
-	splitAuth := strings.Split(authHeader, " ")
-	if len(splitAuth) < 2 || splitAuth[0] != "Bearer" {
+	scheme, token, _ := strings.Cut(authHeader, " ")
+	token = strings.TrimSpace(token)
+	if !strings.EqualFold(scheme, "Bearer") || token == "" || strings.ContainsAny(token, " \t") {
 		return "", errors.New("malformed authorization header")
 	}
-
-	return splitAuth[1], nil
+	return token, nil
 }
 
 func MakeRefreshToken() (string, error) {
@@ -107,17 +110,4 @@ func MakeRefreshToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(token), nil
-}
-
-func GetAPIKey(headers http.Header) (string, error) {
-	authHeader := headers.Get("Authorization")
-	if authHeader == "" {
-		return "", ErrNoAuthHeaderIncluded
-	}
-	splitAuth := strings.Split(authHeader, " ")
-	if len(splitAuth) < 2 || splitAuth[0] != "ApiKey" {
-		return "", errors.New("malformed authorization header")
-	}
-
-	return splitAuth[1], nil
 }
