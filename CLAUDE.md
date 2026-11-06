@@ -70,7 +70,9 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 ## Workflow
 
 - Before editing, read the relevant phase in `docs/ROADMAP.md`. Tick each item as it lands, in the same commit.
-- One commit per roadmap checkbox, with a clear message. Stage files by path, never `git add -A`. Don't push unless asked.
+- Each phase gets its own branch, `phase-N-<slug>` (for example `phase-3-aws-terraform`), cut from an up-to-date `main`. Never commit to `main` directly.
+- One commit per roadmap checkbox, with a clear message. Stage files by path, never `git add -A`. Don't push unless asked, and then push the branch, never `main`.
+- When the phase is done and the user has reviewed it, open a PR to `main` with `gh pr create` (the default repo is `danielakinremi1-dev/Tubely-video-manager`; never target the `upstream` bootdotdev repo). The body covers the summary, decisions, bugs found and verification. Merge with a merge commit (`gh pr merge --merge`), not a squash, so the per-checkbox history survives.
 - After each commit-sized change, run `go build ./... && go vet ./... && go test ./...`, `gofmt -l .` and `make lint`. Never commit a failing build or new lint findings. Fix the cause rather than adding `//nolint`; when a finding is deliberate, use `//nolint:<linter> // reason`.
 - At the end of each phase, stop for the user's review before starting the next one.
 - For frontend changes, list the manual browser checks the user should do, because JS can't be run here.

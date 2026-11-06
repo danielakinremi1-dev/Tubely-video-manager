@@ -124,6 +124,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 - [ ] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
 - [ ] `terraform fmt -check` and `terraform validate`. No `apply` and no AWS credentials in CI.
 - [ ] CI badge in the README
+- [ ] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging
 
 ## Phase 5: Documentation
 
