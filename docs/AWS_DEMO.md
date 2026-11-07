@@ -40,6 +40,8 @@ Deliberately left out to keep the cost at $0: AWS WAF (billed monthly), CloudFro
    ```
    On macOS: `brew tap hashicorp/tap && brew install hashicorp/tap/terraform`.
 2. **AWS CLI v2**, with credentials for an IAM user or an SSO session that can create the resources above (for example, `AdministratorAccess` on a personal account). Root credentials are refused: they can't assume roles, and they shouldn't be used day to day. Check with `aws sts get-caller-identity`. To use a named profile, `export AWS_PROFILE=<name>` before the steps below.
+
+   If your account is in an **AWS Organization**, deploy into a **workload member account**: not the management account (`make aws-up` refuses it) and not the account that administers IAM Identity Center. Create one under Organizations → AWS accounts → Add an AWS account, then assign your SSO user and permission set to it.
 3. Everything for local development (Go, ffmpeg); see the [README](../README.md).
 
 One-time setup:
@@ -79,4 +81,5 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars   # then set budget_ema
 - **A deleted video still plays for a while.** CloudFront caches media at the edge, and Tubely doesn't send cache invalidations, because keys are unguessable UUIDs that are never reused. The edge copy ages out, and the bucket object is already gone.
 - **Uploads fail with `AccessDenied` on `AssumeRole`.** The role trusts only the identity that ran `make aws-up`. Run `make dev-aws` with the same credentials (the same `AWS_PROFILE`).
 - **`make aws-down` reports something left right after destroy.** The tagging API can list a just-deleted resource for a few minutes. Run `scripts/aws-verify-clean.sh` again; if it's still there, delete it in the console.
+- **`AccessDenied ... with an explicit deny in a service control policy`.** An organization guardrail blocks the call, no matter what IAM permissions you have. A common one restricts regions: for example, it keeps us-east-1 for global services (IAM, CloudFront, Budgets, which this stack calls there and which such policies usually allow) and puts workloads such as S3 in another region. Set `region` in `infra/terraform.tfvars` to an allowed region and run `make aws-up` again. Ask whoever manages the organization which regions are allowed (AWS Organizations → Policies → Service control policies).
 - **Budget emails.** AWS Budgets sends them only when a threshold is crossed, so silence is the normal case.

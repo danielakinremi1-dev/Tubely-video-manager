@@ -28,6 +28,14 @@ if [[ $arn == *":root" ]]; then
   echo "Refusing to deploy with the account's root credentials. Use an IAM user or SSO (see docs/AWS_DEMO.md)." >&2
   exit 1
 fi
+# In an AWS Organization, workloads belong in a member account, not the
+# management account (which controls billing and every account's access).
+mgmt=$(aws organizations describe-organization --region "$region" \
+  --query Organization.MasterAccountId --output text 2>/dev/null || true)
+if [[ -n $mgmt && $mgmt == "$account" ]]; then
+  echo "Refusing to deploy into the organization's management account ($account). Use a workload member account (see docs/AWS_DEMO.md)." >&2
+  exit 1
+fi
 echo "Deploying to account $account as $arn"
 echo
 

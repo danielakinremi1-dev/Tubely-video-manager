@@ -57,9 +57,11 @@ expect_media() {
 
 AWS_MODE=${SMOKE_AWS:-0}
 if [[ $AWS_MODE == 1 ]]; then
-  bucket_keys() { aws s3api list-objects-v2 --bucket "$BUCKET" --query 'Contents[].Key' --output text | tr '\t' '\n' | grep -v '^None$' | sort; }
+  # Pass the bucket's region: an org region guardrail may deny S3 calls
+  # sent to the CLI's default region.
+  bucket_keys() { aws s3api list-objects-v2 --region "${S3_REGION:-us-east-1}" --bucket "$BUCKET" --query 'Contents[].Key' --output text | tr '\t' '\n' | grep -v '^None$' | sort; }
   # shellcheck disable=SC2016 # backticks are JMESPath, not shell
-  open_uploads() { aws s3api list-multipart-uploads --bucket "$BUCKET" --query 'length(Uploads || `[]`)' --output text; }
+  open_uploads() { aws s3api list-multipart-uploads --region "${S3_REGION:-us-east-1}" --bucket "$BUCKET" --query 'length(Uploads || `[]`)' --output text; }
 else
   bucket_keys() { curl -s "$S3/$BUCKET?list-type=2&max-keys=1000" | grep -o '<Key>[^<]*' | sed 's/<Key>//' | sort; }
   open_uploads() { curl -s "$S3/$BUCKET?uploads" | grep -c '<UploadId>'; }
