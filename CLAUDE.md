@@ -49,6 +49,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 - `internal/auth`: JWT, refresh tokens, password hashing, bearer header parsing
 - `docker-compose.yml`, `Makefile`, `Dockerfile`: local services (S3Mock, plus the app under the `app` profile), shortcuts, and the multi-stage image (cgo build, then bookworm-slim with ffmpeg, non-root)
 - `scripts/smoke.sh`: end-to-end HTTP check of a running server; run it after changes to the upload path
+- `.github/workflows/ci.yml`: CI (`lint`, `test` with the S3 emulator, `terraform`), using the same make targets; `scripts/protect-main.sh` sets `main`'s branch protection
 - `app/`: frontend
 - `infra/`: Terraform for the AWS demo stack (local state, git-ignored; `.terraform.lock.hcl` is committed)
 - `docs/`: public docs (`ROADMAP.md`, `AWS_DEMO.md`)
@@ -73,7 +74,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 ## Workflow
 
 - Before editing, read the relevant phase in `docs/ROADMAP.md`. Tick each item as it lands, in the same commit.
-- Each phase gets its own branch, `phase-N-<slug>` (for example `phase-3-aws-terraform`), cut from an up-to-date `main`. Never commit to `main` directly.
+- Each phase gets its own branch, `phase-N-<slug>` (for example `phase-3-aws-terraform`), cut from an up-to-date `main`. Never commit to `main` directly; branch protection rejects direct pushes, and a PR merges only when the `lint`, `test` and `terraform` checks pass on a branch that's up to date with `main`.
 - One commit per roadmap checkbox, with a clear message. Stage files by path, never `git add -A`. Don't push unless asked, and then push the branch, never `main`.
 - When the phase is done and the user has reviewed it, open a PR to `main` with `gh pr create` (the default repo is `danielakinremi1-dev/Tubely-video-manager`; never target the `upstream` bootdotdev repo). The body covers the summary, decisions, bugs found and verification. Merge with a merge commit (`gh pr merge --merge`), not a squash, so the per-checkbox history survives.
 - After each commit-sized change, run `go build ./... && go vet ./... && go test ./...`, `gofmt -l .` and `make lint`. Never commit a failing build or new lint findings. Fix the cause rather than adding `//nolint`; when a finding is deliberate, use `//nolint:<linter> // reason`.

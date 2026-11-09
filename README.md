@@ -170,6 +170,8 @@ It then audits the bucket and the server's temp directory for leftovers.
 - **test:** `go test -race` with coverage, with ffmpeg installed and S3Mock as a service container, so the integration tests run rather than skip;
 - **terraform:** `make tf-fmt tf-validate tf-scan`, with no AWS credentials. CI never plans or applies.
 
+`main` is protected ([`scripts/protect-main.sh`](scripts/protect-main.sh)). Changes arrive by pull request, and a PR merges only when all three jobs pass on a branch that's up to date with `main`.
+
 ## Project layout
 
 ```
@@ -181,7 +183,7 @@ internal/database/        hand-written SQL and goose migrations
 internal/auth/            JWTs, refresh tokens, password hashing
 app/                      web UI (vanilla JS, no build step)
 infra/                    Terraform for the AWS demo stack (S3, CloudFront, IAM, budget)
-scripts/                  smoke test; AWS up, down and verify-clean
+scripts/                  smoke test; AWS up, down and verify-clean; branch protection
 docs/                     ROADMAP.md, AWS_DEMO.md
 ```
 
@@ -189,17 +191,16 @@ The API layer depends only on the `storage.Store` and `media.Processor` interfac
 
 ## Status
 
-Phases 0 to 3 of the [roadmap](docs/ROADMAP.md) are done:
+Phases 0 to 4 of the [roadmap](docs/ROADMAP.md) are done:
 - crash fixes;
 - local S3-compatible storage;
 - a correct upload pipeline;
 - a layered structure with tested interfaces;
 - operational basics (timeouts, graceful shutdown, structured logs, a health check, Docker);
-- Terraform for AWS (private S3, CloudFront, a least-privilege role, a budget alert), created and destroyed on demand.
+- Terraform for AWS (private S3, CloudFront, a least-privilege role, a budget alert), created and destroyed on demand;
+- CI on every pull request (lint, race tests with the S3 emulator, Terraform checks), with `main` protected.
 
-The next phases:
-- **Phase 4:** CI.
-- **Phase 5:** documentation.
+Next: **Phase 5**, documentation.
 
 ## Credits
 
