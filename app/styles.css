@@ -56,12 +56,6 @@ h1 {
     margin-left: 24px;
 }
 
-.subtitle {
-    color: var(--subtle-color);
-    font-size: 0.5em;
-    margin-left: 10px;
-}
-
 h2 {
     color: var(--primary-color);
     margin-bottom: 16px;
