@@ -52,7 +52,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
 - `.github/workflows/ci.yml`: CI (`lint`, `test` with the S3 emulator, `terraform`), using the same make targets; `scripts/protect-main.sh` sets `main`'s branch protection
 - `app/`: frontend
 - `infra/`: Terraform for the AWS demo stack (local state, git-ignored; `.terraform.lock.hcl` is committed)
-- `docs/`: public docs (`ROADMAP.md`, `AWS_DEMO.md`)
+- `docs/`: public docs (`ROADMAP.md`, `AWS_DEMO.md`, `DESIGN.md` for the decisions behind the code; keep its code links in sync when those lines move)
 
 ## Conventions
 
