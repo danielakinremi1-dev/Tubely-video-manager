@@ -138,6 +138,10 @@ Everything here is written and validated offline (`terraform fmt` / `validate` n
 
 - [ ] README rewrite: overview, demo GIF, architecture diagram, local quickstart, API table, and credits for the course this project started from
 - [ ] Design notes: fast-start (`moov` atom) for streaming, CloudFront vs. a public bucket, presigned vs. CDN URLs, aspect-ratio key prefixes, keys vs. URLs
+- [ ] Remove the leftover starter subtitle from the web UI
+- [ ] GitHub repo description and topics
+
+**Done when:** a newcomer can go from a fresh clone to a playing video using only the README, every design note links to the code that implements it, and the repository page describes the project.
 
 ## Later
 
