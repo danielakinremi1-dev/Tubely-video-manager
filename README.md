@@ -196,4 +196,4 @@ The next phases:
 
 ## Credits
 
-Tubely began as the starter code for boot.dev's [Learn File Servers and CDNs with S3 and CloudFront](https://www.boot.dev/courses/learn-file-servers-s3-cloudfront-golang) course. Everything since then is tracked in this repository's history and roadmap.
+Starter boilerplate from [boot.dev](https://www.boot.dev/courses/learn-file-servers-s3-cloudfront-golang).
