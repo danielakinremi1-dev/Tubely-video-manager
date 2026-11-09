@@ -41,7 +41,7 @@ make down                   # stop services; `docker compose down -v` wipes uplo
   - `objects.go`: `deleteObject` / `replaceObject`, which log failures and don't return them
   - `media_url.go`: key → public URL (`withMediaURLs`)
   - `json.go`: `respondWithJSON` / `respondWithError` / `decodeJSON`. Use these for every response.
-  - `handlers_test.go`: the `httptest` harness (`newTestServer`, `serve`, `assertJSONError`), using `storage.Memory` and `media.Fake`
+  - `handlers_test.go`: the `httptest` harness (`newTestServer`, `serve`, `assertJSONError`), using `storage.Memory` and `media.Fake`; `integration_test.go` runs the same router against the S3 emulator and real ffmpeg (skipped unless `TUBELY_TEST_S3_ENDPOINT` is set)
 - `internal/storage`: the `Store` interface for media objects, the S3 implementation (endpoint, path-style, multipart via the transfer manager) and an in-memory `Memory` store for tests
 - `internal/media`: the `Processor` interface (`Probe`, `FastStart`), the `FFmpeg` implementation (timeouts, stderr in errors), `ClassifyAspectRatio` and a `Fake` for tests
 - `internal/database`: SQL by hand, with no ORM. Lookups return `database.ErrNotFound` when a row is missing.

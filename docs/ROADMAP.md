@@ -127,7 +127,7 @@ Everything here is written and validated offline (`terraform fmt` / `validate` n
 ## Phase 4: Continuous integration
 
 - [x] GitHub Actions: `gofmt`, `go vet`, golangci-lint, and `go test -race -cover` (with ffmpeg installed)
-- [ ] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
+- [x] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
 - [ ] `terraform fmt -check`, `terraform validate` and the Trivy scan (`make tf-scan`). No `apply` and no AWS credentials in CI.
 - [ ] CI badge in the README
 - [ ] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging

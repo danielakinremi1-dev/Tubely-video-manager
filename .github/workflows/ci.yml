@@ -38,6 +38,17 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # The same S3 emulator as docker-compose.yml, so the S3 integration
+    # tests (internal/storage, internal/api) run instead of skipping.
+    services:
+      s3:
+        image: adobe/s3mock:5.2.3
+        ports:
+          - 9090:9090
+        env:
+          COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: tubely-local
+    env:
+      TUBELY_TEST_S3_ENDPOINT: http://localhost:9090
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -50,8 +61,22 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends ffmpeg
           ffmpeg -version | head -1
+      - name: Wait for the S3 emulator
+        run: |
+          for _ in $(seq 1 60); do
+            curl -fs -o /dev/null "$TUBELY_TEST_S3_ENDPOINT/tubely-local" && exit 0
+            sleep 1
+          done
+          echo "S3 emulator didn't start"; exit 1
       - name: go test -race -cover
         run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      # A guard: the emulator tests must have run, not skipped.
+      - name: Integration tests ran
+        shell: bash # -o pipefail, so a failing go test fails the step
+        run: |
+          go test -count=1 -run 'Integration|TestS3Put|TestS3Cancelled' -v ./internal/api ./internal/storage \
+            | tee integration.log | grep -E '^(--- |ok|FAIL)'
+          if grep -q -- '--- SKIP' integration.log; then echo "integration tests were skipped"; exit 1; fi
       - name: Coverage summary
         run: |
           total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $NF}')
