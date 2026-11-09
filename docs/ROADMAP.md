@@ -129,7 +129,7 @@ Everything here is written and validated offline (`terraform fmt` / `validate` n
 - [x] GitHub Actions: `gofmt`, `go vet`, golangci-lint, and `go test -race -cover` (with ffmpeg installed)
 - [x] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
 - [x] `terraform fmt -check`, `terraform validate` and the Trivy scan (`make tf-scan`). No `apply` and no AWS credentials in CI.
-- [ ] CI badge in the README
+- [x] CI badge in the README
 - [ ] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging
 
 **Done when:** a pull request to `main` can't merge until CI is green, and `main` itself is green, with the README badge showing it. CI runs the same `make` targets as a local checkout, with the same pinned tool versions.

@@ -1,5 +1,7 @@
 # Tubely
 
+[![CI](https://github.com/danielakinremi1-dev/Tubely-video-manager/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/danielakinremi1-dev/Tubely-video-manager/actions/workflows/ci.yml)
+
 Tubely is a video-hosting backend written in Go. Users sign up, create video drafts, upload an MP4 and a thumbnail, and play the videos back from S3-compatible object storage. It started as a course starter project and is being built up, one reviewable phase at a time, into a production-shaped service: validated uploads, multipart transfers to S3, versioned database migrations, and infrastructure as code.
 
 Everything runs on your machine. You don't need an AWS account.
@@ -156,12 +158,17 @@ The unit and handler tests cover:
 - middleware (request IDs, access logs, panic recovery), server timeouts and graceful shutdown;
 - ffprobe and fast-start against small sample files in `internal/media/testdata`.
 
-The S3 integration tests run single-part, multipart and cancelled uploads against S3Mock. `scripts/smoke.sh` drives a running server over HTTP through:
+The S3 integration tests run single-part, multipart and cancelled uploads against S3Mock. They also run one full pass through the API: upload a video and a thumbnail, play the video from the URL built from its stored key, delete it, and check that both objects are gone. `scripts/smoke.sh` drives a running server over HTTP through:
 - every error code;
 - a 40 MB multipart upload and a client disconnect;
 - playback, range requests and delete.
 
 It then audits the bucket and the server's temp directory for leftovers.
+
+[CI](.github/workflows/ci.yml) runs on every pull request and every push to `main`, using the same `make` targets and pinned tool versions as a local checkout:
+- **lint:** `gofmt`, `go vet`, `make lint`;
+- **test:** `go test -race` with coverage, with ffmpeg installed and S3Mock as a service container, so the integration tests run rather than skip;
+- **terraform:** `make tf-fmt tf-validate tf-scan`, with no AWS credentials. CI never plans or applies.
 
 ## Project layout
 
