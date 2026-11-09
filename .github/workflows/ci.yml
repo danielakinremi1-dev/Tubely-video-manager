@@ -1,0 +1,59 @@
+# CI for every push to main and every pull request. Each job runs the same
+# commands as a local checkout (make targets with pinned tool versions), so
+# a green run here means `make check` and `make lint` pass on a clean machine.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only token: CI only checks code, it never writes to the repository.
+permissions:
+  contents: read
+
+# A new push to a PR cancels that PR's older, still-running checks.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint (pinned image, see Makefile)
+        run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # The media tests skip when ffmpeg is missing; installing it here
+      # makes sure they actually run.
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+      - name: go test -race -cover
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        run: |
+          total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $NF}')
+          echo "Total coverage: $total"
+          echo "**Test coverage:** $total" >> "$GITHUB_STEP_SUMMARY"

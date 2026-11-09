@@ -1,0 +1,8 @@
+# The workflow pins actions to commit SHAs (a tag can be moved; a SHA
+# can't). Dependabot opens a PR when a pinned action has a new release.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
