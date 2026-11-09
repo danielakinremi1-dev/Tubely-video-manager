@@ -28,7 +28,7 @@ flowchart LR
     API --> FF["ffprobe / ffmpeg<br/>validate + fast start"]
     API -->|"S3 API, multipart"| Store["S3-compatible bucket"]
     Store -.-> Mock["S3Mock in Docker<br/>(local)"]
-    Store -.-> S3["AWS S3 + CloudFront<br/>(Phase 3)"]
+    Store -.-> S3["AWS S3 + CloudFront<br/>(Terraform demo stack)"]
     UI -->|"playback via MEDIA_BASE_URL"| Store
 ```
 
@@ -42,13 +42,13 @@ An upload works like this:
 
 ## What runs where
 
-| Piece | Locally (today) | On AWS |
+| Piece | Locally (default) | AWS demo stack |
 |---|---|---|
-| API and web UI | `go run ./cmd/tubely`, or the Docker image (`make up-app`) | Not deployed yet |
-| Database | SQLite file (`DB_PATH`) | Not deployed yet |
-| Media storage | [S3Mock](https://github.com/adobe/S3Mock) in Docker on `:9090` | S3 bucket behind CloudFront, managed by Terraform in [Phase 3](docs/ROADMAP.md) |
+| API and web UI | `go run ./cmd/tubely`, or the Docker image (`make up-app`) | Still on your machine (`make dev-aws`) |
+| Database | SQLite file (`DB_PATH`) | SQLite file (`tubely-aws.db`) |
+| Media storage | [S3Mock](https://github.com/adobe/S3Mock) in Docker on `:9090` | Private S3 bucket, served through CloudFront with Origin Access Control |
 
-An earlier version ran against a real S3 bucket and CloudFront distribution. That stack was deliberately torn down to avoid charges. The plan is to bring AWS back as Terraform you can create for a demo and destroy with one command. The code already supports real S3: change the settings described in `.env.example`.
+The AWS stack is Terraform in [`infra/`](infra). `make aws-up` creates it for a demo, and `make aws-down` destroys it and checks that nothing is left. It isn't kept running, to avoid charges. It was last demonstrated end to end on 2026-11-09 and then destroyed: the smoke test passed against CloudFront, direct S3 reads were denied, and the app's role could upload and delete but not read. The runbook is [docs/AWS_DEMO.md](docs/AWS_DEMO.md). The app's code is the same in both setups; only the configuration changes.
 
 ## Prerequisites
 
@@ -110,8 +110,11 @@ All settings are environment variables, read from `.env` if it exists. The defau
 | `S3_ENDPOINT` | no | Custom S3 endpoint, such as the emulator. Leave it unset for AWS. |
 | `S3_FORCE_PATH_STYLE` | no | `true` for emulators, which need `host/bucket/key` URLs |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | no | Placeholders for the emulator. On AWS, use your normal credentials or profile. |
+| `S3_ROLE_ARN` | no | A role to assume for temporary S3 credentials (the AWS demo uses one) |
 
 \* `S3_CF_DISTRO` (a CloudFront domain) is still accepted in place of `MEDIA_BASE_URL`, for older configurations.
+
+To use a different settings file, set `ENV_FILE` in your shell. For example, `ENV_FILE=.env.aws` (what `make dev-aws` does) reads only that file.
 
 ## API
 
@@ -170,22 +173,24 @@ internal/media/           Processor interface: ffprobe/ffmpeg and a test fake
 internal/database/        hand-written SQL and goose migrations
 internal/auth/            JWTs, refresh tokens, password hashing
 app/                      web UI (vanilla JS, no build step)
-docs/ROADMAP.md           phased plan and progress
+infra/                    Terraform for the AWS demo stack (S3, CloudFront, IAM, budget)
+scripts/                  smoke test; AWS up, down and verify-clean
+docs/                     ROADMAP.md, AWS_DEMO.md
 ```
 
 The API layer depends only on the `storage.Store` and `media.Processor` interfaces. `cmd/tubely` plugs in S3 and FFmpeg; tests plug in an in-memory store and a fake processor.
 
 ## Status
 
-Phases 0 to 2 of the [roadmap](docs/ROADMAP.md) are done:
+Phases 0 to 3 of the [roadmap](docs/ROADMAP.md) are done:
 - crash fixes;
 - local S3-compatible storage;
 - a correct upload pipeline;
 - a layered structure with tested interfaces;
-- operational basics (timeouts, graceful shutdown, structured logs, a health check, Docker).
+- operational basics (timeouts, graceful shutdown, structured logs, a health check, Docker);
+- Terraform for AWS (private S3, CloudFront, a least-privilege role, a budget alert), created and destroyed on demand.
 
 The next phases:
-- **Phase 3:** Terraform for AWS with budget guardrails.
 - **Phase 4:** CI.
 - **Phase 5:** documentation.
 

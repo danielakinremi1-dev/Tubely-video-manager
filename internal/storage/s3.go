@@ -7,8 +7,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 // S3Config selects the bucket and, optionally, an S3-compatible endpoint.
@@ -21,6 +23,11 @@ type S3Config struct {
 	// ForcePathStyle uses host/bucket/key URLs. Emulators usually need it
 	// because they can't serve virtual-hosted buckets (bucket.host/key).
 	ForcePathStyle bool
+	// RoleARN, if set, is assumed with the base credentials (environment,
+	// profile or SSO) and S3 calls use the role's temporary credentials,
+	// refreshed before they expire. The AWS demo's role can only write and
+	// delete objects in its bucket.
+	RoleARN string
 }
 
 // S3 is a Store backed by Amazon S3 or an S3-compatible server.
@@ -47,6 +54,12 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3, error) {
 	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.Region))
 	if err != nil {
 		return nil, err
+	}
+	if cfg.RoleARN != "" {
+		awsCfg.Credentials = aws.NewCredentialsCache(stscreds.NewAssumeRoleProvider(
+			sts.NewFromConfig(awsCfg), cfg.RoleARN,
+			func(o *stscreds.AssumeRoleOptions) { o.RoleSessionName = "tubely-app" },
+		))
 	}
 	client := s3.NewFromConfig(awsCfg, s3ClientOptions(cfg.Endpoint, cfg.ForcePathStyle))
 	return &S3{

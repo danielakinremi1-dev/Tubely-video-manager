@@ -1,0 +1,22 @@
+# Trivy misconfiguration findings accepted for this stack, with reasons.
+# The stack is a short-lived demo (created and destroyed in about an hour)
+# and is built to cost about $0. Revisit these before running it long term.
+
+# CloudFront access logging: needs a log bucket and adds storage, for a demo
+# with nothing to audit.
+AWS-0010
+
+# AWS WAF: billed monthly per web ACL and per rule even when idle. Media URLs
+# are unguessable UUIDs and the budget alert covers abuse during a demo.
+AWS-0011
+
+# S3 server access logging: same reasoning as CloudFront logging.
+AWS-0089
+
+# S3 versioning: demo media is disposable (7-day expiry, force_destroy), and
+# old versions would only add storage cost.
+AWS-0090
+
+# Customer-managed KMS key: about $1/month per key plus request fees. Objects
+# are still encrypted at rest with SSE-S3.
+AWS-0132

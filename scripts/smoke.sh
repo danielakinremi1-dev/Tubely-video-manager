@@ -10,6 +10,13 @@
 # that no multipart uploads are left open, and (if SMOKE_TMP_CMD is set)
 # that the server left no temp files. Needs curl and python3; ffmpeg is
 # optional (without it the large-file checks are skipped).
+#
+# SMOKE_AWS=1 (make smoke-aws) targets the AWS demo stack: the bucket is
+# private, so it's listed with the AWS CLI and your credentials, and media
+# comes from CloudFront, which answers 403 (not 404) for a missing key.
+
+# SC2015: "check && ok || bad" is intended; ok only prints, so it can't fail.
+# shellcheck disable=SC2015
 set -uo pipefail
 
 BASE=${BASE_URL:-http://localhost:8091}
@@ -39,24 +46,33 @@ expect() {
   fi
 }
 
-# expect_media NAME STATUS curl-args...: a status check for media URLs,
-# which S3 answers itself (errors are XML, not Tubely's JSON).
+# expect_media NAME STATUS-REGEX curl-args...: a status check for media
+# URLs, which S3 or CloudFront answers itself (errors aren't Tubely's JSON).
 expect_media() {
   local name=$1 want=$2 got
   shift 2
   got=$(curl -s -o /dev/null -w '%{http_code}' "$@")
-  [[ $got == "$want" ]] && ok "$name -> $got" || bad "$name: want $want, got $got"
+  [[ $got =~ ^($want)$ ]] && ok "$name -> $got" || bad "$name: want $want, got $got"
 }
 
-bucket_keys() { curl -s "$S3/$BUCKET?list-type=2&max-keys=1000" | grep -o '<Key>[^<]*' | sed 's/<Key>//' | sort; }
-open_uploads() { curl -s "$S3/$BUCKET?uploads" | grep -c '<UploadId>'; }
+AWS_MODE=${SMOKE_AWS:-0}
+if [[ $AWS_MODE == 1 ]]; then
+  # Pass the bucket's region: an org region guardrail may deny S3 calls
+  # sent to the CLI's default region.
+  bucket_keys() { aws s3api list-objects-v2 --region "${S3_REGION:-us-east-1}" --bucket "$BUCKET" --query 'Contents[].Key' --output text | tr '\t' '\n' | grep -v '^None$' | sort; }
+  # shellcheck disable=SC2016 # backticks are JMESPath, not shell
+  open_uploads() { aws s3api list-multipart-uploads --region "${S3_REGION:-us-east-1}" --bucket "$BUCKET" --query 'length(Uploads || `[]`)' --output text; }
+else
+  bucket_keys() { curl -s "$S3/$BUCKET?list-type=2&max-keys=1000" | grep -o '<Key>[^<]*' | sed 's/<Key>//' | sort; }
+  open_uploads() { curl -s "$S3/$BUCKET?uploads" | grep -c '<UploadId>'; }
+fi
 
 # ---- preflight
 if [[ $(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/healthz") != 200 ]]; then
   echo "Tubely isn't healthy at $BASE (start it with 'make up-app' or 'make dev')" >&2
   exit 2
 fi
-if ! curl -s -o /dev/null "$S3/$BUCKET?list-type=2"; then
+if [[ $AWS_MODE != 1 ]] && ! curl -s -o /dev/null "$S3/$BUCKET?list-type=2"; then
   echo "No S3 emulator at $S3" >&2
   exit 2
 fi
@@ -127,7 +143,7 @@ if [[ -n $big ]]; then
   expect "$(($(stat -c %s "$big") / 1048576)) MB MP4 (multipart)" 200 -X POST "$VU" "${A[@]}" -F "video=@$big;type=video/mp4"
 fi
 video_url=$(json "['video_url']" <"$WORK/body")
-expect_media "replaced object is gone" 404 "$first_url"
+expect_media "replaced object is gone" "403|404" "$first_url"
 expect_media "stored video is served" 200 "$video_url"
 curl -s -o "$WORK/video.dl" "$video_url"
 python3 - "$WORK/video.dl" <<'PY' && ok "stored video is fast-start (moov before mdat)" || bad "stored video isn't fast-start"
@@ -142,7 +158,8 @@ thumb_url=$(json "['thumbnail_url']" <"$WORK/body")
 
 section "leftovers"
 sleep 1
-key_of() { python3 -c "import sys; u=sys.argv[1]; print(u.split('/$BUCKET/', 1)[1])" "$1"; }
+# The key is the URL path, after the bucket name for a path-style emulator URL.
+key_of() { python3 -c "import sys, urllib.parse as p; u=sys.argv[1]; m='/$BUCKET/'; print(u.split(m, 1)[1] if m in u else p.urlparse(u).path.lstrip('/'))" "$1"; }
 want_keys=$(printf '%s\n%s\n' "$(key_of "$video_url")" "$(key_of "$thumb_url")" | sort)
 new_keys=$(comm -13 <(echo "$keys_before") <(bucket_keys))
 [[ $new_keys == "$want_keys" ]] && ok "new objects are exactly the video and its thumbnail" ||

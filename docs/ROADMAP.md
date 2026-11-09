@@ -107,14 +107,20 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 **Done when:** handlers have no direct AWS or ffmpeg calls, and `go test ./...` covers the main upload path without network access.
 
-## Phase 3: AWS infrastructure as code
+## Phase 3: AWS infrastructure as code ✅
 
-- [ ] `infra/` Terraform with the provider pinned. Private S3 bucket (all public access blocked, `force_destroy`, 7-day expiry lifecycle rule).
-- [ ] CloudFront with Origin Access Control, `PriceClass_100`, HTTPS only, and a bucket policy limited to that distribution
-- [ ] Least-privilege IAM for the app: `s3:GetObject`, `s3:PutObject` and `s3:DeleteObject` on `bucket/*` only
-- [ ] AWS Budgets alert ($1 actual, $5 forecast), included in the first apply
-- [ ] Every resource tagged `Project=tubely`; outputs for `bucket_name` and `cloudfront_domain`; local state only (git-ignored)
-- [ ] `docs/AWS_DEMO.md` runbook plus `make aws-up` (apply, then write `.env.aws`) and `make aws-down` (destroy, then check that nothing tagged `Project=tubely` is left)
+Everything here is written and validated offline (`terraform fmt` / `validate` need no credentials). The Done-when demo ran on 2026-11-09 in a sandbox member account (us-east-2):
+- `make smoke-aws` passed 28/28.
+- CloudFront served the media, and direct S3 reads were denied.
+- The app role could upload and delete but not read or list.
+- `make aws-down` left nothing tagged `Project=tubely`.
+
+- [x] `infra/` skeleton: Terraform and providers pinned (lock file committed), `default_tags` with `Project=tubely`, a region variable, local state only (git-ignored), and `make tf-fmt` / `make tf-validate`
+- [x] Private S3 bucket: all public access blocked, bucket-owner-enforced, SSE-S3, a TLS-only policy, `force_destroy`, and lifecycle rules (expire objects after 7 days, abort incomplete multipart uploads after 1 day)
+- [x] CloudFront with Origin Access Control, `PriceClass_100` and HTTPS only; the bucket policy lets only that distribution read
+- [x] Least-privilege app role: `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on `bucket/*` only, assumed for temporary credentials (no long-lived keys). The app never reads objects; CloudFront does.
+- [x] AWS Budgets alert ($1 actual, $5 forecast), included in the first apply
+- [x] `docs/AWS_DEMO.md` runbook, an `ENV_FILE` setting, `make aws-up` (apply, then write `.env.aws`), `make dev-aws`, and `make aws-down` (destroy, then check that nothing tagged `Project=tubely` is left)
 
 **Done when:** `make aws-up` → upload and play a video → `make aws-down` works end to end.
 
@@ -122,7 +128,7 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 - [ ] GitHub Actions: `gofmt`, `go vet`, golangci-lint, and `go test -race -cover` (with ffmpeg installed)
 - [ ] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
-- [ ] `terraform fmt -check` and `terraform validate`. No `apply` and no AWS credentials in CI.
+- [ ] `terraform fmt -check`, `terraform validate` and the Trivy scan (`make tf-scan`). No `apply` and no AWS credentials in CI.
 - [ ] CI badge in the README
 - [ ] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging
 
