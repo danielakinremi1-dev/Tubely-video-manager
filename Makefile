@@ -7,9 +7,11 @@ TRIVY_VERSION := 0.76.0
 # A local terraform if installed; otherwise the pinned image, running as you
 # so files it writes in infra/ aren't owned by root. The image is used only
 # for offline commands (fmt, validate, lock); aws-up/aws-down need a real
-# install and your AWS credentials.
-TERRAFORM := $(shell command -v terraform 2>/dev/null || echo 'docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v "$(CURDIR)/infra":/infra -w /infra hashicorp/terraform:$(TERRAFORM_VERSION)')
-TF_DIR := $(if $(shell command -v terraform 2>/dev/null),-chdir=infra,)
+# install and your AWS credentials. TF_USE_DOCKER=1 (set in CI) always uses
+# the pinned image, even when the machine has some other terraform.
+TERRAFORM_LOCAL := $(if $(TF_USE_DOCKER),,$(shell command -v terraform 2>/dev/null))
+TERRAFORM := $(or $(TERRAFORM_LOCAL),docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v "$(CURDIR)/infra":/infra -w /infra hashicorp/terraform:$(TERRAFORM_VERSION))
+TF_DIR := $(if $(TERRAFORM_LOCAL),-chdir=infra,)
 
 up: ## Start local services (S3 emulator)
 	docker compose up -d

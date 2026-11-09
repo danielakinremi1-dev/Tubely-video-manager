@@ -124,13 +124,15 @@ Everything here is written and validated offline (`terraform fmt` / `validate` n
 
 **Done when:** `make aws-up` → upload and play a video → `make aws-down` works end to end.
 
-## Phase 4: Continuous integration
+## Phase 4: Continuous integration ✅
 
-- [ ] GitHub Actions: `gofmt`, `go vet`, golangci-lint, and `go test -race -cover` (with ffmpeg installed)
-- [ ] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
-- [ ] `terraform fmt -check`, `terraform validate` and the Trivy scan (`make tf-scan`). No `apply` and no AWS credentials in CI.
-- [ ] CI badge in the README
-- [ ] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging
+- [x] GitHub Actions: `gofmt`, `go vet`, golangci-lint, and `go test -race -cover` (with ffmpeg installed)
+- [x] Integration tests against the S3 emulator as a service container: upload → key stored → URL built → delete removes the object
+- [x] `terraform fmt -check`, `terraform validate` and the Trivy scan (`make tf-scan`). No `apply` and no AWS credentials in CI.
+- [x] CI badge in the README
+- [x] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging
+
+**Done when:** a pull request to `main` can't merge until CI is green, and `main` itself is green, with the README badge showing it. CI runs the same `make` targets as a local checkout, with the same pinned tool versions.
 
 ## Phase 5: Documentation
 

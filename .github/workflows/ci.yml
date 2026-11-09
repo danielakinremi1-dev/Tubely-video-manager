@@ -1,0 +1,100 @@
+# CI for every push to main and every pull request. Each job runs the same
+# commands as a local checkout (make targets with pinned tool versions), so
+# a green run here means `make check` and `make lint` pass on a clean machine.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only token: CI only checks code, it never writes to the repository.
+permissions:
+  contents: read
+
+# A new push to a PR cancels that PR's older, still-running checks.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint (pinned image, see Makefile)
+        run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    # The same S3 emulator as docker-compose.yml, so the S3 integration
+    # tests (internal/storage, internal/api) run instead of skipping.
+    services:
+      s3:
+        image: adobe/s3mock:5.2.3
+        ports:
+          - 9090:9090
+        env:
+          COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: tubely-local
+    env:
+      TUBELY_TEST_S3_ENDPOINT: http://localhost:9090
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # The media tests skip when ffmpeg is missing; installing it here
+      # makes sure they actually run.
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+      - name: Wait for the S3 emulator
+        run: |
+          for _ in $(seq 1 60); do
+            curl -fs -o /dev/null "$TUBELY_TEST_S3_ENDPOINT/tubely-local" && exit 0
+            sleep 1
+          done
+          echo "S3 emulator didn't start"; exit 1
+      - name: go test -race -cover
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      # A guard: the emulator tests must have run, not skipped.
+      - name: Integration tests ran
+        shell: bash # -o pipefail, so a failing go test fails the step
+        run: |
+          go test -count=1 -run 'Integration|TestS3Put|TestS3Cancelled' -v ./internal/api ./internal/storage \
+            | tee integration.log | grep -E '^(--- |ok|FAIL)'
+          if grep -q -- '--- SKIP' integration.log; then echo "integration tests were skipped"; exit 1; fi
+      - name: Coverage summary
+        run: |
+          total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $NF}')
+          echo "Total coverage: $total"
+          echo "**Test coverage:** $total" >> "$GITHUB_STEP_SUMMARY"
+
+  # Offline checks only. CI has no AWS credentials and never runs
+  # terraform plan or apply: creating the demo stack is always a local,
+  # reviewed step (make aws-up, docs/AWS_DEMO.md).
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      TF_USE_DOCKER: "1" # the pinned terraform image from the Makefile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: terraform fmt -check
+        run: make tf-fmt
+      - name: terraform validate
+        run: make tf-validate
+      - name: Trivy scan (accepted findings in infra/.trivyignore)
+        run: make tf-scan
