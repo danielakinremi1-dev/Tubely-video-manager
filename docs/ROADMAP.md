@@ -132,6 +132,8 @@ Everything here is written and validated offline (`terraform fmt` / `validate` n
 - [ ] CI badge in the README
 - [ ] Branch protection on `main`: changes arrive by pull request, and the CI checks must pass before merging
 
+**Done when:** a pull request to `main` can't merge until CI is green, and `main` itself is green, with the README badge showing it. CI runs the same `make` targets as a local checkout, with the same pinned tool versions.
+
 ## Phase 5: Documentation
 
 - [ ] README rewrite: overview, demo GIF, architecture diagram, local quickstart, API table, and credits for the course this project started from
