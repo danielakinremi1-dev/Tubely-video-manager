@@ -82,3 +82,19 @@ jobs:
           total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $NF}')
           echo "Total coverage: $total"
           echo "**Test coverage:** $total" >> "$GITHUB_STEP_SUMMARY"
+
+  # Offline checks only. CI has no AWS credentials and never runs
+  # terraform plan or apply: creating the demo stack is always a local,
+  # reviewed step (make aws-up, docs/AWS_DEMO.md).
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      TF_USE_DOCKER: "1" # the pinned terraform image from the Makefile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: terraform fmt -check
+        run: make tf-fmt
+      - name: terraform validate
+        run: make tf-validate
+      - name: Trivy scan (accepted findings in infra/.trivyignore)
+        run: make tf-scan
