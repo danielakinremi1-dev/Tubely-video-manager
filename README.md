@@ -6,6 +6,8 @@ Tubely is a video-hosting backend in Go. You upload an MP4, and Tubely checks it
 
 The whole thing runs on your machine with Docker, and you don't need an AWS account. The AWS side (a private S3 bucket behind CloudFront) is Terraform that's created for a demo and destroyed afterwards.
 
+![Tubely demo: create a draft, upload a thumbnail and an MP4, play and seek the video, then delete it](docs/media/demo.gif)
+
 ## Highlights
 
 - **Uploads that check what they receive.** The file type is detected from its bytes, not the client's `Content-Type`. Size is capped at 1 GB for videos and 10 MB for thumbnails, and ffprobe confirms a video is playable. Every failure returns the right status code (`400`, `401`, `403`, `404`, `413`, `415`, `422` or `500`) with a JSON error.
@@ -215,7 +217,7 @@ docs/                     DESIGN.md (decisions), AWS_DEMO.md (runbook), ROADMAP.
 
 ## Status
 
-Phases 0 to 4 of the [roadmap](docs/ROADMAP.md) are done: crash fixes, local S3 storage, a correct upload pipeline, a tested layered structure, Terraform for AWS, and CI. Phase 5, documentation, is in progress.
+Phases 0 to 5 of the [roadmap](docs/ROADMAP.md) are done: crash fixes, local S3 storage, a correct upload pipeline, a tested layered structure, Terraform for AWS, CI, and documentation. What could come next is in the roadmap's *Later* section.
 
 After that comes the roadmap's *Later* section: signed URLs for private media, asynchronous processing, and direct-to-S3 uploads.
 
