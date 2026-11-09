@@ -107,9 +107,13 @@ Uploads and playback currently depend on an AWS stack that no longer exists. Thi
 
 **Done when:** handlers have no direct AWS or ffmpeg calls, and `go test ./...` covers the main upload path without network access.
 
-## Phase 3: AWS infrastructure as code
+## Phase 3: AWS infrastructure as code ✅
 
-Everything here is written and validated offline (`terraform fmt` / `validate` need no credentials). Nothing touches AWS until the Done-when demo, which needs an explicit go-ahead.
+Everything here is written and validated offline (`terraform fmt` / `validate` need no credentials). The Done-when demo ran on 2026-11-09 in a sandbox member account (us-east-2):
+- `make smoke-aws` passed 28/28.
+- CloudFront served the media, and direct S3 reads were denied.
+- The app role could upload and delete but not read or list.
+- `make aws-down` left nothing tagged `Project=tubely`.
 
 - [x] `infra/` skeleton: Terraform and providers pinned (lock file committed), `default_tags` with `Project=tubely`, a region variable, local state only (git-ignored), and `make tf-fmt` / `make tf-validate`
 - [x] Private S3 bucket: all public access blocked, bucket-owner-enforced, SSE-S3, a TLS-only policy, `force_destroy`, and lifecycle rules (expire objects after 7 days, abort incomplete multipart uploads after 1 day)
