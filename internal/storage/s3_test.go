@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -46,6 +47,15 @@ func TestNewS3AssumesRole(t *testing.T) {
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "base")
 	t.Setenv("AWS_CONFIG_FILE", t.TempDir()+"/none")
 	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", t.TempDir()+"/none")
+	// A profile exported in the developer's shell (AWS_PROFILE=sandbox) would
+	// point at a profile the empty config above doesn't have. Setenv first so
+	// the original value is restored after the test.
+	for _, v := range []string{"AWS_PROFILE", "AWS_DEFAULT_PROFILE"} {
+		t.Setenv(v, "")
+		if err := os.Unsetenv(v); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	for _, tc := range []struct {
 		role string
